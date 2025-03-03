@@ -6,6 +6,14 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		E01278502D72927600829591 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = E012784F2D72927600829591 /* libsqlite3.tbd */; };
+		E01278592D72CD9D00829591 /* liuDB.csv in Resources */ = {isa = PBXBuildFile; fileRef = E01278582D72CD9D00829591 /* liuDB.csv */; };
+		E04270D72D74744C00E17F0E /* liu.db in Resources */ = {isa = PBXBuildFile; fileRef = E04270D62D74744C00E17F0E /* liu.db */; };
+		E04270DA2D7476A400E17F0E /* FMDB in Frameworks */ = {isa = PBXBuildFile; productRef = E04270D92D7476A400E17F0E /* FMDB */; };
+		E0586A922D71884000D1CD39 /* kboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E0586A8B2D71884000D1CD39 /* kboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		E0586A6B2D717D1C00D1CD39 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -21,13 +29,48 @@
 			remoteGlobalIDString = E0586A592D717D1A00D1CD39;
 			remoteInfo = koshami;
 		};
+		E0586A902D71884000D1CD39 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E0586A522D717D1A00D1CD39 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E0586A8A2D71884000D1CD39;
+			remoteInfo = kboard;
+		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		E0586A972D71884000D1CD39 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				E0586A922D71884000D1CD39 /* kboard.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		E012784F2D72927600829591 /* libsqlite3.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
+		E01278582D72CD9D00829591 /* liuDB.csv */ = {isa = PBXFileReference; lastKnownFileType = text; path = liuDB.csv; sourceTree = "<group>"; };
+		E04270D62D74744C00E17F0E /* liu.db */ = {isa = PBXFileReference; lastKnownFileType = file; path = liu.db; sourceTree = "<group>"; };
 		E0586A5A2D717D1A00D1CD39 /* koshami.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = koshami.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E0586A6A2D717D1C00D1CD39 /* koshamiTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = koshamiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E0586A742D717D1C00D1CD39 /* koshamiUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = koshamiUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E0586A8B2D71884000D1CD39 /* kboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = kboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		E0586A932D71884000D1CD39 /* Exceptions for "kboard" folder in "kboard" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = E0586A8A2D71884000D1CD39 /* kboard */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		E0586A5C2D717D1A00D1CD39 /* koshami */ = {
@@ -43,6 +86,14 @@
 		E0586A772D717D1C00D1CD39 /* koshamiUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = koshamiUITests;
+			sourceTree = "<group>";
+		};
+		E0586A8C2D71884000D1CD39 /* kboard */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				E0586A932D71884000D1CD39 /* Exceptions for "kboard" folder in "kboard" target */,
+			);
+			path = kboard;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -69,15 +120,36 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E0586A882D71884000D1CD39 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E01278502D72927600829591 /* libsqlite3.tbd in Frameworks */,
+				E04270DA2D7476A400E17F0E /* FMDB in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		E012784E2D72927500829591 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				E012784F2D72927600829591 /* libsqlite3.tbd */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		E0586A512D717D1A00D1CD39 = {
 			isa = PBXGroup;
 			children = (
+				E04270D62D74744C00E17F0E /* liu.db */,
+				E01278582D72CD9D00829591 /* liuDB.csv */,
 				E0586A5C2D717D1A00D1CD39 /* koshami */,
 				E0586A6D2D717D1C00D1CD39 /* koshamiTests */,
 				E0586A772D717D1C00D1CD39 /* koshamiUITests */,
+				E0586A8C2D71884000D1CD39 /* kboard */,
+				E012784E2D72927500829591 /* Frameworks */,
 				E0586A5B2D717D1A00D1CD39 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -88,6 +160,7 @@
 				E0586A5A2D717D1A00D1CD39 /* koshami.app */,
 				E0586A6A2D717D1C00D1CD39 /* koshamiTests.xctest */,
 				E0586A742D717D1C00D1CD39 /* koshamiUITests.xctest */,
+				E0586A8B2D71884000D1CD39 /* kboard.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -102,10 +175,12 @@
 				E0586A562D717D1A00D1CD39 /* Sources */,
 				E0586A572D717D1A00D1CD39 /* Frameworks */,
 				E0586A582D717D1A00D1CD39 /* Resources */,
+				E0586A972D71884000D1CD39 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				E0586A912D71884000D1CD39 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				E0586A5C2D717D1A00D1CD39 /* koshami */,
@@ -163,6 +238,29 @@
 			productReference = E0586A742D717D1C00D1CD39 /* koshamiUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		E0586A8A2D71884000D1CD39 /* kboard */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E0586A942D71884000D1CD39 /* Build configuration list for PBXNativeTarget "kboard" */;
+			buildPhases = (
+				E0586A872D71884000D1CD39 /* Sources */,
+				E0586A882D71884000D1CD39 /* Frameworks */,
+				E0586A892D71884000D1CD39 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				E0586A8C2D71884000D1CD39 /* kboard */,
+			);
+			name = kboard;
+			packageProductDependencies = (
+				E04270D92D7476A400E17F0E /* FMDB */,
+			);
+			productName = kboard;
+			productReference = E0586A8B2D71884000D1CD39 /* kboard.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -184,6 +282,9 @@
 						CreatedOnToolsVersion = 16.2;
 						TestTargetID = E0586A592D717D1A00D1CD39;
 					};
+					E0586A8A2D71884000D1CD39 = {
+						CreatedOnToolsVersion = 16.2;
+					};
 				};
 			};
 			buildConfigurationList = E0586A552D717D1A00D1CD39 /* Build configuration list for PBXProject "koshami" */;
@@ -195,6 +296,9 @@
 			);
 			mainGroup = E0586A512D717D1A00D1CD39;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				E04270D82D7476A400E17F0E /* XCRemoteSwiftPackageReference "fmdb" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = E0586A5B2D717D1A00D1CD39 /* Products */;
 			projectDirPath = "";
@@ -203,6 +307,7 @@
 				E0586A592D717D1A00D1CD39 /* koshami */,
 				E0586A692D717D1C00D1CD39 /* koshamiTests */,
 				E0586A732D717D1C00D1CD39 /* koshamiUITests */,
+				E0586A8A2D71884000D1CD39 /* kboard */,
 			);
 		};
 /* End PBXProject section */
@@ -226,6 +331,15 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E0586A892D71884000D1CD39 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E04270D72D74744C00E17F0E /* liu.db in Resources */,
+				E01278592D72CD9D00829591 /* liuDB.csv in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -253,6 +367,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E0586A872D71884000D1CD39 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -265,6 +386,11 @@
 			isa = PBXTargetDependency;
 			target = E0586A592D717D1A00D1CD39 /* koshami */;
 			targetProxy = E0586A752D717D1C00D1CD39 /* PBXContainerItemProxy */;
+		};
+		E0586A912D71884000D1CD39 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E0586A8A2D71884000D1CD39 /* kboard */;
+			targetProxy = E0586A902D71884000D1CD39 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -518,6 +644,62 @@
 			};
 			name = Release;
 		};
+		E0586A952D71884000D1CD39 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3PA7AY3L5L;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = kboard/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = kboard;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tw.kolo.koshami.kboard;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		E0586A962D71884000D1CD39 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3PA7AY3L5L;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = kboard/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = kboard;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tw.kolo.koshami.kboard;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -557,7 +739,35 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		E0586A942D71884000D1CD39 /* Build configuration list for PBXNativeTarget "kboard" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E0586A952D71884000D1CD39 /* Debug */,
+				E0586A962D71884000D1CD39 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		E04270D82D7476A400E17F0E /* XCRemoteSwiftPackageReference "fmdb" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ccgus/fmdb";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.7.12;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		E04270D92D7476A400E17F0E /* FMDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E04270D82D7476A400E17F0E /* XCRemoteSwiftPackageReference "fmdb" */;
+			productName = FMDB;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = E0586A522D717D1A00D1CD39 /* Project object */;
 }
