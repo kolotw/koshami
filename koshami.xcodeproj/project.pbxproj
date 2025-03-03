@@ -8,10 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		E01278502D72927600829591 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = E012784F2D72927600829591 /* libsqlite3.tbd */; };
-		E01278592D72CD9D00829591 /* liuDB.csv in Resources */ = {isa = PBXBuildFile; fileRef = E01278582D72CD9D00829591 /* liuDB.csv */; };
 		E04270D72D74744C00E17F0E /* liu.db in Resources */ = {isa = PBXBuildFile; fileRef = E04270D62D74744C00E17F0E /* liu.db */; };
 		E04270DA2D7476A400E17F0E /* FMDB in Frameworks */ = {isa = PBXBuildFile; productRef = E04270D92D7476A400E17F0E /* FMDB */; };
 		E0586A922D71884000D1CD39 /* kboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E0586A8B2D71884000D1CD39 /* kboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E09987F62D7562930025D1CD /* bopomospell.csv in Resources */ = {isa = PBXBuildFile; fileRef = E09987F52D7562930025D1CD /* bopomospell.csv */; };
+		E09987F72D7562930025D1CD /* bopomofo.csv in Resources */ = {isa = PBXBuildFile; fileRef = E09987F42D7562930025D1CD /* bopomofo.csv */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -54,12 +55,13 @@
 
 /* Begin PBXFileReference section */
 		E012784F2D72927600829591 /* libsqlite3.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
-		E01278582D72CD9D00829591 /* liuDB.csv */ = {isa = PBXFileReference; lastKnownFileType = text; path = liuDB.csv; sourceTree = "<group>"; };
 		E04270D62D74744C00E17F0E /* liu.db */ = {isa = PBXFileReference; lastKnownFileType = file; path = liu.db; sourceTree = "<group>"; };
 		E0586A5A2D717D1A00D1CD39 /* koshami.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = koshami.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E0586A6A2D717D1C00D1CD39 /* koshamiTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = koshamiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E0586A742D717D1C00D1CD39 /* koshamiUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = koshamiUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E0586A8B2D71884000D1CD39 /* kboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = kboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		E09987F42D7562930025D1CD /* bopomofo.csv */ = {isa = PBXFileReference; lastKnownFileType = text; path = bopomofo.csv; sourceTree = "<group>"; };
+		E09987F52D7562930025D1CD /* bopomospell.csv */ = {isa = PBXFileReference; lastKnownFileType = text; path = bopomospell.csv; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -143,8 +145,9 @@
 		E0586A512D717D1A00D1CD39 = {
 			isa = PBXGroup;
 			children = (
+				E09987F42D7562930025D1CD /* bopomofo.csv */,
+				E09987F52D7562930025D1CD /* bopomospell.csv */,
 				E04270D62D74744C00E17F0E /* liu.db */,
-				E01278582D72CD9D00829591 /* liuDB.csv */,
 				E0586A5C2D717D1A00D1CD39 /* koshami */,
 				E0586A6D2D717D1C00D1CD39 /* koshamiTests */,
 				E0586A772D717D1C00D1CD39 /* koshamiUITests */,
@@ -338,8 +341,9 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E09987F62D7562930025D1CD /* bopomospell.csv in Resources */,
+				E09987F72D7562930025D1CD /* bopomofo.csv in Resources */,
 				E04270D72D74744C00E17F0E /* liu.db in Resources */,
-				E01278592D72CD9D00829591 /* liuDB.csv in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

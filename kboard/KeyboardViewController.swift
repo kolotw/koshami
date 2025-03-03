@@ -28,7 +28,7 @@ class KeyboardViewController: UIInputViewController {
     let boshiamySymbols = [
         ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
         ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
-        ["A", "S", "D", "F", "G", "H", "J", "K", "L", "'"],
+        ["A", "S", "D", "F", "G", "H", "J", "K", "L", "、"],
         ["Z", "X", "C", "V", "B", "N", "M", "，", "."],
         ["🌐", "   space   ", "英"]
     ]
@@ -68,6 +68,16 @@ class KeyboardViewController: UIInputViewController {
     private var initialKeyboardHeight: CGFloat = 0
     private var initialIsLandscape: Bool = false
     private var initialKeyboardMetricsSet = false
+    
+    // 同音字反查功能所需的屬性
+    var isHomophoneLookupMode = false  // 表示是否處於同音字反查模式
+    var homophoneLookupStage = 0       // 反查階段: 0=未開始, 1=輸入字根, 2=選擇注音, 3=選擇同音字
+    var lastSelectedCharacter = ""     // 最後選擇的字
+    var bopomofoDictionary: [String: [String]] = [:]  // 字 -> 注音列表
+    var bopomospellDictionary: [String: [String]] = [:]  // 注音 -> 字列表
+    
+    private var deleteTimer: Timer?
+    private var isLongPressDeleteActive = false
     
     // 初始化資料庫
     func initDatabase() {
@@ -154,6 +164,9 @@ class KeyboardViewController: UIInputViewController {
         
         // 初始化資料庫
         initDatabase()
+        
+        // 加載注音資料庫
+        loadBopomofoData()
         
         do {
             // 延遲設置視圖，確保尺寸已穩定
@@ -396,6 +409,18 @@ class KeyboardViewController: UIInputViewController {
         // 播放按鍵反饋
         animateButton(sender)
         
+        // 檢查是否為「、」符號，觸發同音字反查模式
+        if key == "、" && isBoshiamyMode {
+            startHomophoneLookup()
+            return
+        }
+        
+        // 根據同音字反查階段處理按鍵
+        if isHomophoneLookupMode {
+            handleHomophoneLookupKeyPress(key)
+            return
+        }
+        
         // 處理特殊按鍵
         if key.contains("中") || key.contains("英") {
             toggleInputMode()
@@ -425,6 +450,7 @@ class KeyboardViewController: UIInputViewController {
         } else if key.contains("🌐") || key.contains("⌄") {
             dismissKeyboard()
         } else if key.contains("delete") || key.contains("⌫") {
+            print("DELETE")
             if isBoshiamyMode && !collectedRoots.isEmpty {
                 // 如果在嘸蝦米模式下並且有收集的字根，則刪除最後一個字根
                 collectedRoots = String(collectedRoots.dropLast())
@@ -676,18 +702,80 @@ class KeyboardViewController: UIInputViewController {
     @objc func candidateSelected(_ sender: UIButton) {
         let candidate = sender.title(for: .normal) ?? ""
         
-        // 輸入選中的字詞
-        textDocumentProxy.insertText(candidate)
-        
-        // 清除已輸入的字根
-        collectedRoots = ""
-        
-        // 更新輸入字碼顯示
-        updateInputCodeDisplay("")
-        
-        // 清空候選字區域
-        displayCandidates([])
-    }
+        // 根據同音字反查階段處理選擇
+       if isHomophoneLookupMode {
+           switch homophoneLookupStage {
+           case 1:  // 選擇字的階段
+               // 保存選擇的字
+               lastSelectedCharacter = candidate
+               
+               // 查詢該字的注音
+               if let bopomofoList = bopomofoDictionary[candidate], !bopomofoList.isEmpty {
+                   homophoneLookupStage = 2  // 進入注音選擇階段
+                   
+                   // 更新輸入提示
+                   updateInputCodeDisplay("選擇「" + candidate + "」的注音")
+                   
+                   // 顯示注音列表作為候選字
+                   displayCandidates(bopomofoList)
+               } else {
+                   // 找不到注音，直接輸入字並退出反查模式
+                   textDocumentProxy.insertText(candidate)
+                   exitHomophoneLookupMode()
+               }
+               break
+               
+           case 2:  // 選擇注音的階段
+               // 查詢該注音的同音字
+               if let homophoneList = bopomospellDictionary[candidate], !homophoneList.isEmpty {
+                   homophoneLookupStage = 3  // 進入同音字選擇階段
+                   
+                   // 更新輸入提示
+                   updateInputCodeDisplay("「" + candidate + "」")
+                   
+                   // 顯示同音字列表
+                   displayCandidates(homophoneList)
+               } else {
+                   // 找不到同音字，退回到字根輸入階段
+                   homophoneLookupStage = 1
+                   updateInputCodeDisplay("同音字反查：" + collectedRoots)
+                   
+                   // 重新顯示字根對應的候選字
+                   let candidates = lookupBoshiamyDictionary(collectedRoots)
+                   displayCandidates(candidates)
+               }
+               break
+               
+           case 3:  // 選擇同音字的階段
+               // 輸入選中的同音字
+               textDocumentProxy.insertText(candidate)
+               
+               // 退出反查模式
+               exitHomophoneLookupMode()
+               break
+               
+           default:
+               break
+           }
+           
+       } else {
+           // 原有的候選字選擇處理...
+           // 輸入選中的字詞
+           textDocumentProxy.insertText(candidate)
+           
+           // 清除已輸入的字根
+           collectedRoots = ""
+           
+           // 更新輸入字碼顯示
+           updateInputCodeDisplay("")
+           
+           // 清空候選字區域
+           displayCandidates([])
+           
+           
+       }
+   }
+    
     
     // 添加按鍵視覺反饋
     func animateButton(_ button: UIButton) {
@@ -743,8 +831,9 @@ class KeyboardViewController: UIInputViewController {
                 titleFontSize = 10
                 subtitleFontSize = 16
             } else {
+                //ipad直
                 titleFontSize = 12
-                subtitleFontSize = 18
+                subtitleFontSize = 22
             }
         
             // 根據設備類型和方向調整間距和邊距
@@ -765,8 +854,8 @@ class KeyboardViewController: UIInputViewController {
             } else {
                 // 其他情況（iPad等）
                 buttonSpacing = 4
-                rowSpacing = 12
-                keyboardPadding = 8
+                rowSpacing = 8
+                keyboardPadding = 5
             }
             
             // 創建主容器
@@ -796,10 +885,11 @@ class KeyboardViewController: UIInputViewController {
             // 創建主鍵盤容器
             let mainKeyboardStackView = UIStackView()
             mainKeyboardStackView.axis = .vertical
-            mainKeyboardStackView.distribution = .fillEqually
+            mainKeyboardStackView.distribution = .fill
             mainKeyboardStackView.spacing = rowSpacing  // 使用調整後的行間距
             mainKeyboardStackView.translatesAutoresizingMaskIntoConstraints = false
             mainHorizontalStackView.addArrangedSubview(mainKeyboardStackView)
+        
             
             // 選擇當前佈局和次要標籤
             let currentLayout = isBoshiamyMode ? boshiamySymbols : keyboardRows
@@ -810,13 +900,15 @@ class KeyboardViewController: UIInputViewController {
                 let rowStackView = UIStackView()
                 rowStackView.axis = .horizontal
                 
-                if rowIndex == currentLayout.count - 1 {
-                    // 最後一行（空格鍵所在行）使用填充分布
-                    rowStackView.distribution = .fill
-                } else {
-                    // 其他行使用等寬分布
-                    rowStackView.distribution = .fillEqually
-                }
+                // 添加高度約束，可以為不同行設定不同高度
+                    let rowHeight: CGFloat
+                    if rowIndex == currentLayout.count - 1 {
+                        rowHeight = 80  // 最後一行（空格鍵所在行）高度
+                    } else {
+                        rowHeight = 60  // 其他行高度
+                    }
+                rowStackView.heightAnchor.constraint(equalToConstant: rowHeight).isActive = true
+                mainKeyboardStackView.addArrangedSubview(rowStackView)
                 
                 rowStackView.spacing = buttonSpacing  // 使用調整後的按鈕間距
                 rowStackView.translatesAutoresizingMaskIntoConstraints = false
@@ -1008,7 +1100,22 @@ class KeyboardViewController: UIInputViewController {
         columnStackView.translatesAutoresizingMaskIntoConstraints = false
         
         // 固定側欄寬度
-        let sideColumnWidth: CGFloat = isLandscape ? 45 : 40
+        // 根據設備類型和方向設置側欄寬度
+        let sideColumnWidth: CGFloat
+        if isIPhone {
+            if isLandscape {
+                sideColumnWidth = 50  // iPhone 橫向
+            } else {
+                sideColumnWidth = 40  // iPhone 縱向
+            }
+        } else {
+            //ipad
+            if isLandscape {
+                sideColumnWidth = 70  // iPad 橫向
+            } else {
+                sideColumnWidth = 60  // iPad 縱向
+            }
+        }
         columnStackView.widthAnchor.constraint(equalToConstant: sideColumnWidth).isActive = true
         
         // 定義側欄按鍵
@@ -1026,6 +1133,12 @@ class KeyboardViewController: UIInputViewController {
         topConfig.title = topButtonTitle
         topConfig.baseForegroundColor = UIColor.black
         topConfig.background.backgroundColor = UIColor(white: 0.85, alpha: 1.0)
+        // 添加字體設置
+        topConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var outgoing = incoming
+            outgoing.font = UIFont.systemFont(ofSize: isLandscape ? 16 : 18)  // 設置與底部按鈕相同的字體大小
+            return outgoing
+        }
         topButton.configuration = topConfig
         
         // 設置標籤，區分左右側欄
@@ -1063,30 +1176,99 @@ class KeyboardViewController: UIInputViewController {
         
         // 處理backspace（左上或右上按鍵）
         if tag == 1000 || tag == 2000 {
-            // 刪除按鍵 - 與主鍵盤的刪除鍵邏輯相同
-            if isBoshiamyMode && !collectedRoots.isEmpty {
-                // 如果在嘸蝦米模式下並且有收集的字根，則刪除最後一個字根
-                collectedRoots = String(collectedRoots.dropLast())
-                
-                // 更新輸入字碼顯示
-                updateInputCodeDisplay(collectedRoots)
-                
-                // 重新查詢候選字
-                if collectedRoots.isEmpty {
-                    // 如果沒有輸入的字根了，清空候選字區域
-                    displayCandidates([])
-                } else {
-                    // 否則，查詢新的候選字
-                    let candidates = lookupBoshiamyDictionary(collectedRoots)
-                    displayCandidates(candidates)
-                }
-            } else {
-                // 只有在沒有收集的字根時，才刪除文本
-                textDocumentProxy.deleteBackward()
-            }
+            // 執行單擊刪除操作
+            handleDeleteAction()
+            
+            // 添加長按手勢
+            let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPressDelete(_:)))
+            longPress.minimumPressDuration = 0.5  // 0.5秒後觸發長按
+            sender.addGestureRecognizer(longPress)
         } else if tag == 1001 || tag == 2001 {
             // enter - 左下或右下按鍵
             textDocumentProxy.insertText("\n")
+        }
+    }
+    // 新增 - 處理長按刪除手勢
+    @objc func handleLongPressDelete(_ gesture: UILongPressGestureRecognizer) {
+        switch gesture.state {
+        case .began:
+            // 開始長按，啟動連續刪除
+            isLongPressDeleteActive = true
+            startDeleteTimer()
+        case .ended, .cancelled, .failed:
+            // 結束長按，停止連續刪除
+            isLongPressDeleteActive = false
+            stopDeleteTimer()
+        default:
+            break
+        }
+    }
+
+    // 新增 - 啟動刪除定時器
+    private func startDeleteTimer() {
+        // 先停止可能已存在的定時器
+        stopDeleteTimer()
+        
+        // 建立新的定時器，每0.1秒執行一次刪除操作
+        deleteTimer = Timer.scheduledTimer(timeInterval: 0.1, target: self, selector: #selector(timerDeleteAction), userInfo: nil, repeats: true)
+    }
+
+    // 新增 - 停止刪除定時器
+    private func stopDeleteTimer() {
+        deleteTimer?.invalidate()
+        deleteTimer = nil
+    }
+
+    // 新增 - 定時器觸發的刪除操作
+    @objc private func timerDeleteAction() {
+        if isLongPressDeleteActive {
+            handleDeleteAction()
+        }
+    }
+
+    // 新增 - 統一刪除操作的邏輯
+    private func handleDeleteAction() {
+        // 如果沒有收集的字根，直接退出同音字反查模式
+        if collectedRoots.isEmpty {
+            exitHomophoneLookupMode()
+            textDocumentProxy.deleteBackward()  // 執行一般的刪除操作
+            return
+        }
+        
+        // 如果在同音字反查模式下並且有收集的字根
+        if isHomophoneLookupMode && !collectedRoots.isEmpty {
+            // 刪除最後一個字根
+            collectedRoots = String(collectedRoots.dropLast())
+            
+            // 如果刪除後字根為空，退出反查模式
+            if collectedRoots.isEmpty {
+                exitHomophoneLookupMode()
+                return
+            }
+            
+            // 更新輸入提示和候選字
+            updateInputCodeDisplay("同音字反查：" + collectedRoots)
+            let candidates = lookupBoshiamyDictionary(collectedRoots)
+            displayCandidates(candidates)
+        } else if isBoshiamyMode && !collectedRoots.isEmpty {
+            // 嘸蝦米模式下的刪除邏輯
+            collectedRoots = String(collectedRoots.dropLast())
+            
+            // 更新輸入字碼顯示
+            updateInputCodeDisplay(collectedRoots)
+            
+            // 重新查詢候選字
+            if collectedRoots.isEmpty {
+                // 如果沒有輸入的字根了，清空候選字區域
+                displayCandidates([])
+            } else {
+                // 否則，查詢新的候選字
+                let candidates = lookupBoshiamyDictionary(collectedRoots)
+                displayCandidates(candidates)
+            }
+        } else {
+            // 普通刪除操作
+            textDocumentProxy.deleteBackward()
         }
     }
     
@@ -1095,6 +1277,12 @@ class KeyboardViewController: UIInputViewController {
         // 只取字母部分作為字根（忽略空格）
         let rootKey = key.components(separatedBy: " ").first ?? key
         
+        // 檢查是否為「、」符號，觸發同音字反查模式
+        if rootKey == "、" {
+            startHomophoneLookup()
+            return
+        }
+    
         // 檢查是否為數字
         if rootKey.count == 1 && "0123456789".contains(rootKey) {
             // 如果是數字，直接輸入而不收集字根
@@ -1210,4 +1398,229 @@ class KeyboardViewController: UIInputViewController {
     deinit {
         database?.close()
     }
+    //------------同音字反查
+    // 2. 加載注音數據的方法
+       func loadBopomofoData() {
+           print("開始載入注音資料...")
+           
+           // 載入 bopomofo.csv (字 -> 注音)
+           if let bopomofoPath = Bundle.main.path(forResource: "bopomofo", ofType: "csv") {
+               do {
+                   let content = try String(contentsOfFile: bopomofoPath, encoding: .utf8)
+                   let rows = content.components(separatedBy: .newlines)
+                   
+                   for row in rows where !row.isEmpty {
+                       let columns = row.components(separatedBy: ",")
+                       if columns.count >= 3 {
+                           // 格式: id,字,注音
+                           let character = columns[1].trimmingCharacters(in: .whitespacesAndNewlines)
+                           let bopomofo = columns[2].trimmingCharacters(in: .whitespacesAndNewlines)
+                           
+                           if !character.isEmpty && !bopomofo.isEmpty {
+                               if bopomofoDictionary[character] == nil {
+                                   bopomofoDictionary[character] = [bopomofo]
+                               } else {
+                                   bopomofoDictionary[character]?.append(bopomofo)
+                               }
+                           }
+                       }
+                   }
+                   
+                   print("從bopomofo.csv載入了 \(bopomofoDictionary.count) 個字的注音")
+               } catch {
+                   print("讀取bopomofo.csv失敗: \(error)")
+               }
+           }
+           
+           // 載入 bopomospell.csv (注音 -> 同音字)
+           if let bopomospellPath = Bundle.main.path(forResource: "bopomospell", ofType: "csv") {
+               do {
+                   let content = try String(contentsOfFile: bopomospellPath, encoding: .utf8)
+                   let rows = content.components(separatedBy: .newlines)
+                   
+                   for row in rows where !row.isEmpty {
+                       let columns = row.components(separatedBy: ",")
+                       if columns.count >= 3 {
+                           // 格式: id,注音,字
+                           let bopomofo = columns[1].trimmingCharacters(in: .whitespacesAndNewlines)
+                           let character = columns[2].trimmingCharacters(in: .whitespacesAndNewlines)
+                           
+                           if !bopomofo.isEmpty && !character.isEmpty {
+                               if bopomospellDictionary[bopomofo] == nil {
+                                   bopomospellDictionary[bopomofo] = [character]
+                               } else {
+                                   bopomospellDictionary[bopomofo]?.append(character)
+                               }
+                           }
+                       }
+                   }
+                   
+                   print("從bopomospell.csv載入了 \(bopomospellDictionary.count) 個注音的同音字")
+               } catch {
+                   print("讀取bopomospell.csv失敗: \(error)")
+               }
+           }
+       }
+    // 4. 開始同音字反查模式
+        func startHomophoneLookup() {
+            isHomophoneLookupMode = true
+            homophoneLookupStage = 1  // 進入輸入字根階段
+            collectedRoots = ""  // 清空收集的字根
+            
+            // 更新輸入提示
+            updateInputCodeDisplay("同音字反查：")
+            
+            // 清空候選字
+            displayCandidates([])
+        }
+        
+        // 5. 處理同音字反查模式下的按鍵
+        func handleHomophoneLookupKeyPress(_ key: String) {
+            // 處理特殊按鍵
+            if key.contains("space") || key.contains("  　") {
+                handleSpaceInLookupMode()
+                return
+            } else if key.contains("delete") || key.contains("⌫") {
+                handleDeleteInLookupMode()
+                return
+            } else if key.contains("中") || key.contains("英") || key.contains("return") || key.contains("⏎") {
+                // 特殊按鍵直接退出反查模式
+                exitHomophoneLookupMode()
+                
+                // 繼續處理原有功能
+                if key.contains("中") || key.contains("英") {
+                    toggleInputMode()
+                } else if key.contains("return") || key.contains("⏎") {
+                    textDocumentProxy.insertText("\n")
+                }
+                return
+            }
+            
+            // 根據階段處理按鍵
+            switch homophoneLookupStage {
+            case 1:  // 輸入字根階段
+                // 清除字根的按鍵，跳過數字和特殊鍵
+                if key.count == 1 && (key >= "A" && key <= "Z" || key >= "a" && key <= "z" || key == "," || key == ".") {
+                    // 收集字根
+                    collectedRoots += key
+                    
+                    // 更新輸入字碼顯示
+                    updateInputCodeDisplay("同音字反查：" + collectedRoots)
+                    
+                    // 查詢嘸蝦米字典，獲取候選字
+                    let candidates = lookupBoshiamyDictionary(collectedRoots)
+                    
+                    // 顯示候選字詞
+                    displayCandidates(candidates)
+                }
+                break
+                
+            case 2:  // 選擇注音階段
+                // 這個階段的按鍵處理在 candidateSelected 方法中處理
+                break
+                
+            case 3:  // 選擇同音字階段
+                // 這個階段的按鍵處理在 candidateSelected 方法中處理
+                break
+                
+            default:
+                break
+            }
+        }
+    // 6. 處理反查模式下的空格鍵
+       func handleSpaceInLookupMode() {
+           switch homophoneLookupStage {
+           case 1:  // 輸入字根階段
+               if !collectedRoots.isEmpty && !candidateButtons.isEmpty {
+                   // 選擇第一個候選字
+                   if let firstCandidateButton = candidateButtons.first {
+                       candidateSelected(firstCandidateButton)
+                   }
+               }
+               break
+               
+           case 2:  // 選擇注音階段
+               if !candidateButtons.isEmpty {
+                   // 選擇第一個注音
+                   if let firstCandidateButton = candidateButtons.first {
+                       candidateSelected(firstCandidateButton)
+                   }
+               }
+               break
+               
+           case 3:  // 選擇同音字階段
+               if !candidateButtons.isEmpty {
+                   // 選擇第一個同音字
+                   if let firstCandidateButton = candidateButtons.first {
+                       candidateSelected(firstCandidateButton)
+                   }
+               }
+               break
+               
+           default:
+               break
+           }
+       }
+       
+       // 7. 處理反查模式下的刪除鍵
+       func handleDeleteInLookupMode() {
+           switch homophoneLookupStage {
+           case 1:  // 輸入字根階段
+               if !collectedRoots.isEmpty {
+                   // 刪除最後一個字根
+                   collectedRoots = String(collectedRoots.dropLast())
+                   
+                   // 更新輸入提示
+                   updateInputCodeDisplay("同音字反查：" + collectedRoots)
+                   
+                   if collectedRoots.isEmpty {
+                       // 如果字根為空，清空候選字
+                       displayCandidates([])
+                   } else {
+                       // 重新查詢候選字
+                       let candidates = lookupBoshiamyDictionary(collectedRoots)
+                       displayCandidates(candidates)
+                   }
+               } else {
+                   // 如果字根為空，退出反查模式
+                   exitHomophoneLookupMode()
+               }
+               break
+               
+           case 2, 3:  // 選擇注音或同音字階段
+               // 返回上一個階段
+               homophoneLookupStage -= 1
+               
+               if homophoneLookupStage == 1 {
+                   // 返回字根輸入階段
+                   updateInputCodeDisplay("同音字反查：" + collectedRoots)
+                   let candidates = lookupBoshiamyDictionary(collectedRoots)
+                   displayCandidates(candidates)
+               } else if homophoneLookupStage == 2 {
+                   // 返回注音選擇階段
+                   updateInputCodeDisplay("選擇「" + lastSelectedCharacter + "」的注音")
+                   let bopomofoList = bopomofoDictionary[lastSelectedCharacter] ?? []
+                   displayCandidates(bopomofoList)
+               }
+               break
+               
+           default:
+               break
+           }
+       }
+       
+       // 8. 退出同音字反查模式
+       func exitHomophoneLookupMode() {
+           isHomophoneLookupMode = false
+           homophoneLookupStage = 0
+           collectedRoots = ""
+           lastSelectedCharacter = ""
+           
+           // 清空輸入提示和候選字
+           updateInputCodeDisplay("")
+           displayCandidates([])
+       }
+    
+    
+    
 }
