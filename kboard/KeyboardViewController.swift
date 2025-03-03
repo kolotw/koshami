@@ -299,19 +299,55 @@ class KeyboardViewController: UIInputViewController {
     }
     
     // 使用Auto Layout設置視圖
-  
     private func setupViews() {
-        // 創建候選字視圖
+        // 創建頂部視圖容器 - 這將包含候選字視圖和側按鈕
+        let topContainer = UIView()
+        topContainer.backgroundColor = UIColor(white: 0.95, alpha: 1.0)
+        topContainer.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(topContainer)
+        
+        // 創建左側 Enter 按鈕 - 直接添加到頂部容器
+        let enterButton = UIButton(type: .system)
+        enterButton.backgroundColor = UIColor(white: 0.85, alpha: 1.0)
+        enterButton.setTitle("⏎", for: .normal)
+        enterButton.titleLabel?.font = UIFont.systemFont(ofSize: 22)
+        enterButton.layer.cornerRadius = 4
+        enterButton.layer.borderWidth = 0.5
+        enterButton.layer.borderColor = UIColor.darkGray.cgColor
+        enterButton.tag = 3001
+        enterButton.addTarget(self, action: #selector(candidateAreaButtonPressed(_:)), for: .touchUpInside)
+        enterButton.translatesAutoresizingMaskIntoConstraints = false
+        topContainer.addSubview(enterButton)
+        
+        // 創建右側 Backspace 按鈕 - 直接添加到頂部容器
+        let backspaceButton = UIButton(type: .system)
+        backspaceButton.backgroundColor = UIColor(white: 0.85, alpha: 1.0)
+        backspaceButton.setTitle("⌫", for: .normal)
+        backspaceButton.titleLabel?.font = UIFont.systemFont(ofSize: 22)
+        backspaceButton.layer.cornerRadius = 4
+        backspaceButton.layer.borderWidth = 0.5
+        backspaceButton.layer.borderColor = UIColor.darkGray.cgColor
+        backspaceButton.tag = 3000
+        backspaceButton.addTarget(self, action: #selector(candidateAreaButtonPressed(_:)), for: .touchUpInside)
+        backspaceButton.translatesAutoresizingMaskIntoConstraints = false
+        
+        // 添加長按刪除手勢
+        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPressDelete(_:)))
+        longPress.minimumPressDuration = 0.5
+        backspaceButton.addGestureRecognizer(longPress)
+        
+        topContainer.addSubview(backspaceButton)
+        
+        // 創建候選字滾動視圖 - 在Enter和Backspace按鈕之間
         candidateView = UIScrollView()
         candidateView.backgroundColor = UIColor(white: 0.95, alpha: 1.0)
         candidateView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(candidateView)
-        
-        // 創建一個輔助視圖，用於標記輸入框的位置
-        let positionMarker = UIView()
-        positionMarker.translatesAutoresizingMaskIntoConstraints = false
-        positionMarker.backgroundColor = UIColor.clear // 透明不可見
-        candidateView.addSubview(positionMarker)
+        candidateView.isScrollEnabled = true
+        candidateView.showsHorizontalScrollIndicator = false
+        candidateView.showsVerticalScrollIndicator = false
+        candidateView.bounces = true
+        candidateView.alwaysBounceHorizontal = true
+        topContainer.addSubview(candidateView)
         
         // 創建輸入字碼標籤
         inputCodeLabel = UILabel()
@@ -328,33 +364,49 @@ class KeyboardViewController: UIInputViewController {
         keyboardView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(keyboardView)
         
+        // 計算按鈕寬度 - 根據設備調整
+        let sideBtnWidth: CGFloat = isIPhone ? 40 : 50
+        
         // 設置約束
         NSLayoutConstraint.activate([
-            // 候選字視圖約束
-            candidateView.topAnchor.constraint(equalTo: view.topAnchor),
-            candidateView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            candidateView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            // 頂部容器約束
+            topContainer.topAnchor.constraint(equalTo: view.topAnchor),
+            topContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            topContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            topContainer.heightAnchor.constraint(equalToConstant: 50), // 固定高度
             
-            // 位置標記約束 - 放在左側約1/3處
-            positionMarker.topAnchor.constraint(equalTo: candidateView.topAnchor),
-            positionMarker.leadingAnchor.constraint(equalTo: candidateView.leadingAnchor),
-            positionMarker.widthAnchor.constraint(equalTo: candidateView.widthAnchor, multiplier: 0.33), // 放在1/3處
-            positionMarker.heightAnchor.constraint(equalToConstant: 1), // 高度為1，基本不可見
+            // 左側 Enter 按鈕約束 - 固定在頂部容器左側
+            enterButton.leadingAnchor.constraint(equalTo: topContainer.leadingAnchor),
+            enterButton.centerYAnchor.constraint(equalTo: topContainer.centerYAnchor),
+            enterButton.widthAnchor.constraint(equalToConstant: sideBtnWidth),
+            enterButton.heightAnchor.constraint(equalToConstant: 40),
             
-            // 輸入字碼標籤約束 - 與位置標記右側對齊
+            // 右側 Backspace 按鈕約束 - 固定在頂部容器右側
+            backspaceButton.trailingAnchor.constraint(equalTo: topContainer.trailingAnchor),
+            backspaceButton.centerYAnchor.constraint(equalTo: topContainer.centerYAnchor),
+            backspaceButton.widthAnchor.constraint(equalToConstant: sideBtnWidth),
+            backspaceButton.heightAnchor.constraint(equalToConstant: 40),
+            
+            // 候選字滾動視圖約束 - 在左右按鈕之間
+            candidateView.leadingAnchor.constraint(equalTo: enterButton.trailingAnchor, constant: 5),
+            candidateView.trailingAnchor.constraint(equalTo: backspaceButton.leadingAnchor, constant: -5),
+            candidateView.topAnchor.constraint(equalTo: topContainer.topAnchor),
+            candidateView.bottomAnchor.constraint(equalTo: topContainer.bottomAnchor),
+            
+            // 輸入字碼標籤約束
             inputCodeLabel.topAnchor.constraint(equalTo: candidateView.topAnchor, constant: 5),
-            inputCodeLabel.leadingAnchor.constraint(equalTo: positionMarker.trailingAnchor),
+            inputCodeLabel.leadingAnchor.constraint(equalTo: candidateView.leadingAnchor, constant: 10),
             inputCodeLabel.heightAnchor.constraint(equalToConstant: 40),
             
             // 鍵盤視圖約束
-            keyboardView.topAnchor.constraint(equalTo: candidateView.bottomAnchor),
+            keyboardView.topAnchor.constraint(equalTo: topContainer.bottomAnchor),
             keyboardView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             keyboardView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             keyboardView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
         
-        // 保存高度約束以便後續更改
-        candidateViewHeightConstraint = candidateView.heightAnchor.constraint(equalToConstant: 50)
+        // 保存頂部容器高度約束以便後續更改
+        candidateViewHeightConstraint = topContainer.heightAnchor.constraint(equalToConstant: 50)
         candidateViewHeightConstraint.isActive = true
         
         // 初始化空的候選字視圖和清空輸入字碼
@@ -362,6 +414,20 @@ class KeyboardViewController: UIInputViewController {
         displayCandidates([])
     }
 
+    // 添加候選區域按鈕點擊處理方法
+    @objc func candidateAreaButtonPressed(_ sender: UIButton) {
+        animateButton(sender)
+        
+        let tag = sender.tag
+        
+        if tag == 3000 {  // Backspace 按鈕
+            // 執行刪除操作
+            handleDeleteAction()
+        } else if tag == 3001 {  // Enter 按鈕
+            // 執行回車操作
+            textDocumentProxy.insertText("\n")
+        }
+    }
     
     private func updateInputCodeDisplay(_ code: String) {
         if code.isEmpty {
@@ -682,8 +748,6 @@ class KeyboardViewController: UIInputViewController {
     }
     
     // 使用Auto Layout顯示候選字詞
-    
-    
     func displayCandidates(_ candidates: [String]) {
         // 清除現有的候選字按鈕
         for button in candidateButtons {
@@ -691,24 +755,20 @@ class KeyboardViewController: UIInputViewController {
         }
         candidateButtons.removeAll()
         
-        // 移除舊的視圖（除了輸入標籤和位置標記）
+        // 移除舊的視圖（除了輸入標籤）
         for subview in candidateView.subviews {
-            if subview != inputCodeLabel && ((subview.backgroundColor?.isEqual(UIColor.clear)) == nil) {
+            if subview != inputCodeLabel {
                 subview.removeFromSuperview()
             }
         }
         
-        // 如果沒有候選字，縮小候選字視圖高度但保留輸入字碼顯示
+        // 如果沒有候選字，只顯示輸入字碼
         if candidates.isEmpty {
-            candidateViewHeightConstraint.constant = 50
-            view.layoutIfNeeded()
+            // 不需要調整高度，因為高度已經固定為50
             return
         }
         
-        // 有候選字時，調整高度
-        candidateViewHeightConstraint.constant = 50
-        
-        // 創建候選字堆疊視圖 - 所有候選字依序排列在輸入標籤右側
+        // 創建候選字堆疊視圖 - 水平排列
         let candidatesStackView = UIStackView()
         candidatesStackView.axis = .horizontal
         candidatesStackView.spacing = 5
@@ -719,8 +779,8 @@ class KeyboardViewController: UIInputViewController {
         // 設置候選字堆疊視圖約束
         NSLayoutConstraint.activate([
             candidatesStackView.centerYAnchor.constraint(equalTo: candidateView.centerYAnchor),
-            candidatesStackView.leadingAnchor.constraint(equalTo: inputCodeLabel.trailingAnchor, constant: 10),
-            candidatesStackView.trailingAnchor.constraint(lessThanOrEqualTo: candidateView.trailingAnchor, constant: -5)
+            candidatesStackView.leadingAnchor.constraint(equalTo: inputCodeLabel.trailingAnchor, constant: 10)
+            // 不設置trailing約束，允許超出滾動
         ])
         
         // 依序添加候選字按鈕
@@ -730,13 +790,20 @@ class KeyboardViewController: UIInputViewController {
             candidateButtons.append(button)
         }
         
-        // 更新內容大小以支持滾動
+        // 設置堆疊視圖的尾部約束，確保內容寬度足夠
+        if let lastButton = candidateButtons.last {
+            lastButton.trailingAnchor.constraint(equalTo: candidateView.contentLayoutGuide.trailingAnchor, constant: -10).isActive = true
+        }
+        
+        // 更新佈局以計算內容尺寸
         candidateView.layoutIfNeeded()
+        
+        // 設置滾動視圖的內容尺寸
         let stackWidth = candidatesStackView.frame.width
-        let inputWidth = inputCodeLabel.frame.width
-        let totalWidth = inputCodeLabel.frame.minX + inputWidth + 10 + stackWidth + 5
-        candidateView.contentSize = CGSize(width: max(totalWidth, candidateView.frame.width), height: 40)
+        let totalWidth = inputCodeLabel.frame.width + 10 + stackWidth
+        candidateView.contentSize = CGSize(width: max(totalWidth, candidateView.frame.width), height: candidateView.frame.height)
     }
+
     
     // 輔助方法：創建候選按鈕
     
@@ -946,13 +1013,7 @@ class KeyboardViewController: UIInputViewController {
             mainHorizontalStackView.bottomAnchor.constraint(equalTo: keyboardView.bottomAnchor, constant: -keyboardPadding)
         ])
         
-        // 創建左側欄 - 在 iPhone 直式模式下不顯示左側欄
-        if !(isIPhone && !isLandscape) {
-            let sideColumnWidth: CGFloat = isIPhonePortrait ? 32 : (isLandscape ? 45 : 40)
-            let leftColumnStackView = createSideColumn(isLeft: true, isLandscape: isLandscape)
-            leftColumnStackView.setContentHuggingPriority(UILayoutPriority.defaultHigh + 10, for: .horizontal)
-            mainHorizontalStackView.addArrangedSubview(leftColumnStackView)
-        }
+        
         
         // 創建主鍵盤容器
         let mainKeyboardStackView = UIStackView()
@@ -1083,19 +1144,6 @@ class KeyboardViewController: UIInputViewController {
             keyButtons.append(rowButtons)
         }
         
-        // 創建右側欄 - 在 iPhone 直式模式下調整
-        if !isIPhonePortrait || isSymbolMode {
-            let sideColumnWidth: CGFloat = isIPhonePortrait ? 32 : (isLandscape ? 45 : 40)
-            let rightColumnStackView = createSideColumn(isLeft: false, isLandscape: isLandscape, width: sideColumnWidth)
-            rightColumnStackView.setContentHuggingPriority(.defaultHigh + 10, for: .horizontal)
-            mainHorizontalStackView.addArrangedSubview(rightColumnStackView)
-        } else {
-            // iPhone 直式模式下右側欄只顯示刪除和換行按鈕
-            let rightColumnWidth: CGFloat = 40
-            let rightColumnStackView = createSimpleSideColumn(isLandscape: isLandscape, width: rightColumnWidth)
-            rightColumnStackView.setContentHuggingPriority(.defaultHigh + 10, for: .horizontal)
-            mainHorizontalStackView.addArrangedSubview(rightColumnStackView)
-        }
         
         // 在鍵盤創建完成後設置長按手勢
         DispatchQueue.main.async {
