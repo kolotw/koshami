@@ -30,7 +30,7 @@ class KeyboardViewController: UIInputViewController {
         ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
         ["A", "S", "D", "F", "G", "H", "J", "K", "L", "、"],
         ["Z", "X", "C", "V", "B", "N", "M", "，", "."],
-        ["🌐", "   space   ", "符號", "英"]
+        ["🌐", "   空白鍵   ", "符號", "英"]
     ]
     let boshiamySecondaryLabels = [
         ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")"],
@@ -46,7 +46,7 @@ class KeyboardViewController: UIInputViewController {
         ["@", "#", "$", "&", "*", "(", ")", "'", "\"", "-"],
         ["%", "+", "=", "/", ";", ":", ",", ".", "¡", "?"],
         ["€", "£", "¥", "_", "^", "[", "]", "{", "}", "\\"],
-        ["🌐", "  space  ", "ABC"]
+        ["🌐", "  space  ", "中"]
     ]
 
     // 為符號鍵盤添加次要標籤
@@ -239,7 +239,7 @@ class KeyboardViewController: UIInputViewController {
                     let key = currentLayout[row][col]
                     
                     // 跳過特殊按鍵
-                    if key.contains("中") || key.contains("英") || key.contains("space") || key.contains("shift") ||
+                    if key.contains("中") || key.contains("英") || key.contains("space") || key.contains("空白鍵") || key.contains("shift") ||
                         key.contains("⇧") || key.contains("dismiss") || key.contains("⌄") ||
                         key.contains("delete") || key.contains("⌫") || key.contains("return") ||
                         key.contains("⏎") || key.contains("🌐") || key.contains("英/中") ||
@@ -365,7 +365,7 @@ class KeyboardViewController: UIInputViewController {
         view.addSubview(keyboardView)
         
         // 計算按鈕寬度 - 根據設備調整
-        let sideBtnWidth: CGFloat = isIPhone ? 40 : 50
+        let sideBtnWidth: CGFloat = isIPhone ? 80 : 100
         
         // 設置約束
         NSLayoutConstraint.activate([
@@ -522,7 +522,7 @@ class KeyboardViewController: UIInputViewController {
             // 從符號模式返回到原模式
             isSymbolMode = false
             recreateKeyboard()
-        } else if key.contains("space") || key.contains("  　") {
+        } else if key.contains("space") || key.contains("空白鍵") || key.contains("  　") {
             // 處理空白鍵
             if isBoshiamyMode && !collectedRoots.isEmpty {
                 if !candidateButtons.isEmpty {
@@ -1124,7 +1124,7 @@ class KeyboardViewController: UIInputViewController {
                 button.configuration = config
                 
                 // 特別處理空格鍵
-                if keyTitle.contains("space") {
+                if (keyTitle.contains("space") || keyTitle.contains("空白鍵")){
                     // 空格鍵設置低優先級，讓它佔據剩餘空間
                     button.setContentHuggingPriority(.defaultLow - 100, for: .horizontal)
                     button.setContentCompressionResistancePriority(.defaultLow - 100, for: .horizontal)
@@ -1666,7 +1666,7 @@ class KeyboardViewController: UIInputViewController {
         // 5. 處理同音字反查模式下的按鍵
         func handleHomophoneLookupKeyPress(_ key: String) {
             // 處理特殊按鍵
-            if key.contains("space") || key.contains("  　") {
+            if key.contains("space") || key.contains("空白鍵") || key.contains("  　") {
                 handleSpaceInLookupMode()
                 return
             } else if key.contains("delete") || key.contains("⌫") {
