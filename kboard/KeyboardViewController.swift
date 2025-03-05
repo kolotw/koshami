@@ -52,7 +52,7 @@ class KeyboardViewController: UIInputViewController {
                 keyboardPadding = 3
                 keyHeight = 80
                 sideColumnWidth = 40
-                candidateViewHeight = 50
+                candidateViewHeight = 100
                 functionKeyWidthRatio = 0.12
                 
             case .iPhoneLandscape:
@@ -73,9 +73,9 @@ class KeyboardViewController: UIInputViewController {
                 rowSpacing = 8
                 keyboardPadding = 5
                 keyHeight = 80
-                sideColumnWidth = 60
-                candidateViewHeight = 60
-                functionKeyWidthRatio = 0.15
+                sideColumnWidth = 80
+                candidateViewHeight = 100
+                functionKeyWidthRatio = 0.2
                 
             case .iPadLandscape:
                 titleFontSize = 14
@@ -83,10 +83,10 @@ class KeyboardViewController: UIInputViewController {
                 buttonSpacing = 6
                 rowSpacing = 10
                 keyboardPadding = 8
-                keyHeight = 50
-                sideColumnWidth = 70
+                keyHeight = 60
+                sideColumnWidth = 80
                 candidateViewHeight = 60
-                functionKeyWidthRatio = 0.15
+                functionKeyWidthRatio = 0.25
             }
         }
     }
@@ -123,7 +123,7 @@ class KeyboardViewController: UIInputViewController {
     let boshiamySecondaryLabels = [
         ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")"],
         ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
-        ["a", "s", "d", "f", "g", "h", "j", "k", "l", "'"],
+        ["a", "s", "d", "f", "g", "h", "j", "k", "l", "/"],
         ["z", "x", "c", "v", "b", "n", "m", "<", ">"],
         ["", "", "", ""]
     ]
@@ -132,8 +132,8 @@ class KeyboardViewController: UIInputViewController {
     let symbolRows = [
         ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
         ["@", "#", "$", "&", "*", "(", ")", "'", "\"", "-"],
-        ["%", "+", "=", "/", ";", ":", ",", ".", "¡", "?"],
-        ["€", "£", "¥", "_", "^", "[", "]", "{", "}", "\\"],
+        ["%", "+", "=", "/", ";", ":", ",", ".", "!", "?"],
+        ["|", "~", "¥", "_", "^", "[", "]", "{", "}", "\\"],
         ["🌐", "  space  ", "中"]
     ]
 
@@ -596,19 +596,19 @@ class KeyboardViewController: UIInputViewController {
             topContainer.topAnchor.constraint(equalTo: view.topAnchor),
             topContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             topContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            topContainer.heightAnchor.constraint(equalToConstant: 50), // 固定高度
+            topContainer.heightAnchor.constraint(equalToConstant: keyboardMetrics.candidateViewHeight), // 固定高度
             
             // 左側 Enter 按鈕約束 - 固定在頂部容器左側
             enterButton.leadingAnchor.constraint(equalTo: topContainer.leadingAnchor),
             enterButton.centerYAnchor.constraint(equalTo: topContainer.centerYAnchor),
             enterButton.widthAnchor.constraint(equalToConstant: sideBtnWidth),
-            enterButton.heightAnchor.constraint(equalToConstant: 40),
+            enterButton.heightAnchor.constraint(equalToConstant: keyboardMetrics.candidateViewHeight),
             
             // 右側 Backspace 按鈕約束 - 固定在頂部容器右側
             backspaceButton.trailingAnchor.constraint(equalTo: topContainer.trailingAnchor),
             backspaceButton.centerYAnchor.constraint(equalTo: topContainer.centerYAnchor),
             backspaceButton.widthAnchor.constraint(equalToConstant: sideBtnWidth),
-            backspaceButton.heightAnchor.constraint(equalToConstant: 40),
+            backspaceButton.heightAnchor.constraint(equalToConstant: keyboardMetrics.candidateViewHeight),
             
             // 候選字滾動視圖約束 - 在左右按鈕之間
             candidateView.leadingAnchor.constraint(equalTo: enterButton.trailingAnchor, constant: 5),
@@ -629,7 +629,7 @@ class KeyboardViewController: UIInputViewController {
         ])
         
         // 保存頂部容器高度約束以便後續更改
-        candidateViewHeightConstraint = topContainer.heightAnchor.constraint(equalToConstant: 50)
+        candidateViewHeightConstraint =  topContainer.heightAnchor.constraint(equalToConstant: keyboardMetrics.candidateViewHeight)
         candidateViewHeightConstraint.isActive = true
         
         // 初始化空的候選字視圖和清空輸入字碼
@@ -1342,7 +1342,12 @@ class KeyboardViewController: UIInputViewController {
             // 創建行堆疊視圖
             let rowStackView = UIStackView()
             rowStackView.axis = .horizontal
-            rowStackView.distribution = .fill  // 使用 .fill 允許不同寬度
+            // 如果是最後一行，使用不同的分配方式
+            if isLastRow {
+                rowStackView.distribution = .fill  // 填充模式，允許不同寬度
+            } else {
+                rowStackView.distribution = .fillEqually  // 其他行平均分配
+            }
             rowStackView.spacing = buttonSpacing
             rowStackView.translatesAutoresizingMaskIntoConstraints = false
             
@@ -1391,66 +1396,76 @@ class KeyboardViewController: UIInputViewController {
     
     // 專門用於配置最後一行按鈕寬度的方法
     private func configureLastRowWidths(buttons: [UIButton]) {
-        // 獲取可用寬度
-        let availableWidth = keyboardView.bounds.width - (keyboardMetrics.keyboardPadding * 2)
-        let buttonSpacing = keyboardMetrics.buttonSpacing
-        let totalSpacing = buttonSpacing * CGFloat(buttons.count - 1)
-        
-        // 清除現有的寬度約束
-        for button in buttons {
-            for constraint in button.constraints {
-                if constraint.firstAttribute == .width {
-                    button.removeConstraint(constraint)
+        // 確保該方法在正確時機調用 - 先移到主隊列確保視圖已布局
+        DispatchQueue.main.async {
+            // 使用實際父視圖的寬度而不是keyboardView
+            let parentView = buttons.first?.superview
+            guard let parentWidth = parentView?.bounds.width else {
+                print("無法獲取父視圖寬度")
+                return
+            }
+            
+            let buttonSpacing = self.keyboardMetrics.buttonSpacing
+            let totalSpacing = buttonSpacing * CGFloat(buttons.count - 1)
+            let availableWidth = parentWidth
+            
+            // 找出空白鍵的索引
+            var spaceKeyIndex = -1
+            for (index, button) in buttons.enumerated() {
+                let buttonTitle = button.title(for: .normal) ?? ""
+                // 使用更準確的判斷
+                if buttonTitle.contains("space") || buttonTitle.contains("空白鍵") || buttonTitle.contains("  ") {
+                    spaceKeyIndex = index
+                    break
                 }
             }
-        }
-        
-        // 空白鍵設置為佔總寬度的 60%
-        let spaceKeyWidthRatio: CGFloat = 0.6
-        
-        // 找出空白鍵的索引
-        var spaceKeyIndex = -1
-        for (index, button) in buttons.enumerated() {
-            let buttonTitle = button.title(for: .normal) ?? ""
-            print("按鈕 \(index) 標題: \(buttonTitle)")
             
-            if buttonTitle.contains("space") || buttonTitle.contains("空白") {
-                spaceKeyIndex = index
-                break
+            // 如果找不到空白鍵，使用默認值
+            if spaceKeyIndex == -1 {
+                spaceKeyIndex = 1
+                print("無法找到空白鍵，默認使用索引1")
             }
-        }
-        
-        // 如果找不到空白鍵，則默認為第二個按鈕 (索引1)
-        if spaceKeyIndex == -1 {
-            spaceKeyIndex = 1
-            print("無法找到空白鍵，默認使用索引1")
-        }
-        
-        print("空白鍵索引: \(spaceKeyIndex)")
-        
-        // 計算各按鈕寬度
-        let spaceKeyWidth = (availableWidth - totalSpacing) * spaceKeyWidthRatio
-        let functionKeyWidth = ((availableWidth - totalSpacing) * (1 - spaceKeyWidthRatio)) / CGFloat(buttons.count - 1)
-        
-        // 應用新的寬度約束 - 使用非常高的優先級
-        for (index, button) in buttons.enumerated() {
-            if index == spaceKeyIndex {
-                // 空白鍵
-                let constraint = button.widthAnchor.constraint(equalToConstant: spaceKeyWidth)
-                constraint.priority = .required
-                constraint.isActive = true
-                print("設置空白鍵寬度: \(spaceKeyWidth)")
-            } else {
-                // 功能鍵
-                let constraint = button.widthAnchor.constraint(equalToConstant: functionKeyWidth)
-                constraint.priority = .required
-                constraint.isActive = true
-                print("設置功能鍵寬度: \(functionKeyWidth)")
+            
+            // 計算各按鈕寬度 - 提高空白鍵比例
+            let spaceKeyWidthRatio: CGFloat = 0.6 // 空白鍵佔60%
+            let spaceKeyWidth = (availableWidth - totalSpacing) * spaceKeyWidthRatio
+            let functionKeyWidth = ((availableWidth - totalSpacing) * (1 - spaceKeyWidthRatio)) / CGFloat(buttons.count - 1)
+            
+            // 先移除所有現有寬度約束
+            for button in buttons {
+                // 移除所有與寬度相關的約束
+                button.constraints.forEach { constraint in
+                    if constraint.firstAttribute == .width {
+                        button.removeConstraint(constraint)
+                    }
+                }
+                
+                // 也檢查父視圖中的相關約束
+                parentView?.constraints.forEach { constraint in
+                    if constraint.firstItem === button && constraint.firstAttribute == .width {
+                        parentView?.removeConstraint(constraint)
+                    }
+                }
             }
+            
+            // 重新設置所有按鈕寬度
+            for (index, button) in buttons.enumerated() {
+                let widthConstraint: NSLayoutConstraint
+                if index == spaceKeyIndex {
+                    widthConstraint = button.widthAnchor.constraint(equalToConstant: spaceKeyWidth)
+                    widthConstraint.priority = .defaultHigh + 1 // 提高優先級
+                } else {
+                    widthConstraint = button.widthAnchor.constraint(equalToConstant: functionKeyWidth)
+                    widthConstraint.priority = .defaultHigh
+                }
+                widthConstraint.isActive = true
+                
+                print("按鈕 \(index) 寬度設置為: \(index == spaceKeyIndex ? spaceKeyWidth : functionKeyWidth)")
+            }
+            
+            // 強制更新布局
+            parentView?.layoutIfNeeded()
         }
-        
-        // 強制更新佈局
-        self.keyboardView.layoutIfNeeded()
     }
     
     private func configureKeyButton(keyTitle: String, rowIndex: Int, keyIndex: Int, currentSecondaryLabels: [[String]]) -> UIButton {
@@ -2077,8 +2092,12 @@ class KeyboardViewController: UIInputViewController {
        func handleSpaceInLookupMode() {
            switch homophoneLookupStage {
            case 1:  // 輸入字根階段
-               if !collectedRoots.isEmpty && !candidateButtons.isEmpty {
-                   // 選擇第一個候選字
+               if collectedRoots.isEmpty {
+               // 当处于同音字反查模式但未输入字根时，按空格键输出「、」字符
+                   textDocumentProxy.insertText("、")
+                   exitHomophoneLookupMode() // 输入后退出反查模式
+               } else if !candidateButtons.isEmpty {
+                   // 有字根和候选字时，选择第一个候选字
                    if let firstCandidateButton = candidateButtons.first {
                        candidateSelected(firstCandidateButton)
                    }
