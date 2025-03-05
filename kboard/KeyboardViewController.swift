@@ -2,6 +2,94 @@ import UIKit
 import FMDB
 
 class KeyboardViewController: UIInputViewController {
+    enum DeviceState {
+        case iPhonePortrait
+        case iPhoneLandscape
+        case iPadPortrait
+        case iPadLandscape
+    }
+    var isLandscapeMode: Bool {
+        return keyboardMetrics.deviceState == .iPhoneLandscape || keyboardMetrics.deviceState == .iPadLandscape
+    }
+    
+    var isPhonePortraitMode: Bool {
+        return keyboardMetrics.deviceState == .iPhonePortrait
+    }
+    struct KeyboardMetrics {
+        // 當前裝置狀態
+        var deviceState: DeviceState
+        
+        // 字體大小
+        var titleFontSize: CGFloat
+        var subtitleFontSize: CGFloat
+        
+        // 間距和邊距
+        var buttonSpacing: CGFloat
+        var rowSpacing: CGFloat
+        var keyboardPadding: CGFloat
+        
+        // 按鈕尺寸
+        var keyHeight: CGFloat
+        var sideColumnWidth: CGFloat
+        
+        // 候選區高度
+        var candidateViewHeight: CGFloat
+        
+        // 最後一行按鈕比例
+        var functionKeyWidthRatio: CGFloat
+        
+        // 根據裝置狀態初始化所有參數
+        init(deviceState: DeviceState) {
+            self.deviceState = deviceState
+            
+            // 根據狀態設置所有參數
+            switch deviceState {
+            case .iPhonePortrait:
+                titleFontSize = 8
+                subtitleFontSize = 14
+                buttonSpacing = 3
+                rowSpacing = 4
+                keyboardPadding = 3
+                keyHeight = 80
+                sideColumnWidth = 40
+                candidateViewHeight = 50
+                functionKeyWidthRatio = 0.12
+                
+            case .iPhoneLandscape:
+                titleFontSize = 10
+                subtitleFontSize = 16
+                buttonSpacing = 4
+                rowSpacing = 4
+                keyboardPadding = 6
+                keyHeight = 25  // 從 65 降低到 45
+                sideColumnWidth = 50
+                candidateViewHeight = 50
+                functionKeyWidthRatio = 0.12
+                
+            case .iPadPortrait:
+                titleFontSize = 12
+                subtitleFontSize = 22
+                buttonSpacing = 4
+                rowSpacing = 8
+                keyboardPadding = 5
+                keyHeight = 80
+                sideColumnWidth = 60
+                candidateViewHeight = 60
+                functionKeyWidthRatio = 0.15
+                
+            case .iPadLandscape:
+                titleFontSize = 14
+                subtitleFontSize = 24
+                buttonSpacing = 6
+                rowSpacing = 10
+                keyboardPadding = 8
+                keyHeight = 50
+                sideColumnWidth = 70
+                candidateViewHeight = 60
+                functionKeyWidthRatio = 0.15
+            }
+        }
+    }
     
     var database: FMDatabase?
     var isIPhone: Bool {
@@ -14,7 +102,7 @@ class KeyboardViewController: UIInputViewController {
         ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
         ["a", "s", "d", "f", "g", "h", "j", "k", "l", "'"],
         ["⇧", "z", "x", "c", "v", "b", "n", "m", ",", "."],
-        ["🌐", "  space  ", "符號", "中"]
+        ["🌐", "  space  ", "符", "中"]
     ]
     let secondaryLabels = [
         ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")"],
@@ -30,7 +118,7 @@ class KeyboardViewController: UIInputViewController {
         ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
         ["A", "S", "D", "F", "G", "H", "J", "K", "L", "、"],
         ["Z", "X", "C", "V", "B", "N", "M", "，", "."],
-        ["🌐", "   空白鍵   ", "符號", "英"]
+        ["🌐", "   空白鍵   ", "符", "英"]
     ]
     let boshiamySecondaryLabels = [
         ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")"],
@@ -80,15 +168,6 @@ class KeyboardViewController: UIInputViewController {
     // 添加一個狀態變量來追踪是否在"小字模式"
     var isSecondaryLabelMode = false
     var inputCodeLabel: UILabel!
-    var titleFontSize: CGFloat = 8
-    var subtitleFontSize: CGFloat = 10
-    
-    var isAsyncInitialized = false
-    // 在類中添加這些變數來保存初始的尺寸資訊
-    private var initialKeyboardWidth: CGFloat = 0
-    private var initialKeyboardHeight: CGFloat = 0
-    private var initialIsLandscape: Bool = false
-    private var initialKeyboardMetricsSet = false
     
     // 同音字反查功能所需的屬性
     var isHomophoneLookupMode = false  // 表示是否處於同音字反查模式
@@ -99,6 +178,135 @@ class KeyboardViewController: UIInputViewController {
     
     private var deleteTimer: Timer?
     private var isLongPressDeleteActive = false
+    
+    // 鍵盤尺寸參數
+    var keyboardMetrics: KeyboardMetrics!
+    
+    // 獲取當前裝置狀態
+    
+    func getCurrentDeviceState() -> DeviceState {
+        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+        
+        // 主要使用畫面大小來判斷方向，這比裝置方向更可靠
+        let screenSize = UIScreen.main.bounds.size
+        let isLandscape = screenSize.width > screenSize.height
+        
+        print("螢幕大小: \(screenSize), 判斷為\(isLandscape ? "橫向" : "直向")")
+        
+        if isPhone {
+            return isLandscape ? .iPhoneLandscape : .iPhonePortrait
+        } else {
+            return isLandscape ? .iPadLandscape : .iPadPortrait
+        }
+    }
+
+    // 獲取當前尺寸參數
+    func updateKeyboardMetrics() {
+        // 獲取當前狀態
+        let currentState = getCurrentDeviceState()
+        
+        // 更新尺寸參數
+        keyboardMetrics = KeyboardMetrics(deviceState: currentState)
+        
+        // 應用新的尺寸參數
+        applyKeyboardMetrics()
+    }
+
+    // 應用尺寸參數到視圖
+    func applyKeyboardMetrics() {
+        // 更新候選區高度約束
+        candidateViewHeightConstraint.constant = keyboardMetrics.candidateViewHeight
+        
+        // 更新字體大小
+        // 更新輸入代碼顯示區域的字體
+        inputCodeLabel.font = UIFont.systemFont(ofSize: keyboardMetrics.subtitleFontSize)
+        
+        // 更新候選區按鈕的字體大小
+        for button in candidateButtons {
+            button.titleLabel?.font = UIFont.systemFont(ofSize: keyboardMetrics.subtitleFontSize)
+        }
+        
+        // 更新鍵盤視圖的間距和邊距
+        // 查找並更新鍵盤堆疊視圖的間距
+        keyboardView.subviews.forEach { subview in
+            if let stackView = subview as? UIStackView {
+                // 假設這是主堆疊視圖
+                for arrangedSubview in stackView.arrangedSubviews {
+                    if let rowStackView = arrangedSubview as? UIStackView {
+                        // 水平間距 (按鈕間間距)
+                        rowStackView.spacing = keyboardMetrics.buttonSpacing
+                    }
+                }
+                // 垂直間距 (行間間距)
+                stackView.spacing = keyboardMetrics.rowSpacing
+            }
+        }
+        
+        // 更新鍵盤邊距約束
+        for constraint in keyboardView.constraints {
+            if let firstItem = constraint.firstItem as? NSObject,
+               firstItem == keyboardView {
+                // 尋找邊距約束
+                if constraint.firstAttribute == .top || constraint.firstAttribute == .bottom ||
+                   constraint.firstAttribute == .leading || constraint.firstAttribute == .trailing {
+                    constraint.constant = keyboardMetrics.keyboardPadding
+                }
+            }
+        }
+        
+        // 更新按鈕高度約束
+        updateButtonHeights()
+        
+        // 根據設備狀態重新計算鍵盤視圖高度
+        updateKeyboardViewHeight()
+        
+        // 強制立即更新佈局
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
+        
+        // 打印日誌以確認應用了正確的尺寸
+        print("應用鍵盤尺寸參數 - 設備狀態: \(keyboardMetrics.deviceState), 按鍵高度: \(keyboardMetrics.keyHeight), 候選區高度: \(keyboardMetrics.candidateViewHeight)")
+    }
+
+    // 輔助方法：更新所有按鈕的高度
+    private func updateButtonHeights() {
+        for rowButtons in keyButtons {
+            for button in rowButtons {
+                // 移除現有高度約束
+                for constraint in button.constraints {
+                    if constraint.firstAttribute == .height {
+                        button.removeConstraint(constraint)
+                    }
+                }
+                
+                // 添加新的高度約束
+                let heightConstraint = button.heightAnchor.constraint(equalToConstant: keyboardMetrics.keyHeight)
+                heightConstraint.isActive = true
+            }
+        }
+    }
+
+    // 輔助方法：根據設備狀態更新鍵盤視圖高度
+    private func updateKeyboardViewHeight() {
+        // 移除現有的鍵盤視圖高度約束
+        for constraint in view.constraints {
+            if let firstItem = constraint.firstItem as? NSObject,
+               firstItem == keyboardView && constraint.firstAttribute == .height {
+                view.removeConstraint(constraint)
+            }
+        }
+        
+        // 根據設備狀態添加適當的高度約束
+        if keyboardMetrics.deviceState == .iPhoneLandscape {
+            // iPhone 橫屏模式 - 使用螢幕高度的固定比例
+            let screenHeight = UIScreen.main.bounds.height
+            let keyboardHeight = screenHeight * 0.45 - keyboardMetrics.candidateViewHeight
+            keyboardView.heightAnchor.constraint(equalToConstant: keyboardHeight).isActive = true
+        } else {
+            // 其他模式處理...
+            // 如果需要特定高度約束，可以在這裡添加
+        }
+    }
     
     // 初始化資料庫
     func initDatabase() {
@@ -156,51 +364,66 @@ class KeyboardViewController: UIInputViewController {
         }
     }
     
-    private func updateFontAndButtonSizes() {
-        let isLandscape = view.bounds.width > view.bounds.height
-        let isIPhonePortrait = isIPhone && !isLandscape
-        
-        if isIPhonePortrait {
-            // iPhone 直式模式下的優化設定
-            titleFontSize = 8   // 更小的次要標籤字型
-            subtitleFontSize = 10 // 更小的主要標籤字型
-        } else if isLandscape {
-            // 橫向模式設定
-            titleFontSize = 10
-            subtitleFontSize = 16
-        } else {
-            // 其他情況（iPad等）
-            titleFontSize = 12
-            subtitleFontSize = 18
-        }
-        
-        print("更新字型大小設定: titleFontSize = \(titleFontSize), subtitleFontSize = \(subtitleFontSize)")
-    }
+    
+    
     
     // 生命週期方法
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        print("viewDidLoad 開始執行")
+        // 初始化鍵盤尺寸參數
+        keyboardMetrics = KeyboardMetrics(deviceState: getCurrentDeviceState())
         
-        // 初始化資料庫
-        initDatabase()
+        // 設置基本視圖框架
+        setupViews()
         
-        // 加載注音資料庫
-        loadBopomofoData()
+        // 設置嘸蝦米模式
+        isBoshiamyMode = true
         
-        do {
-            // 延遲設置視圖，確保尺寸已穩定
-            DispatchQueue.main.async {
-                self.updateFontAndButtonSizes()
-                self.setupViews()
-                self.isBoshiamyMode = true  // 預設使用嘸蝦米模式
-                
-                // 在鍵盤初始化完成後設置長按手勢
-                DispatchQueue.main.async {
-                    self.setupLongPressGestures()
-                }
+        // 添加方向變化通知監聽
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(screenDidResize),
+            name: UIDevice.orientationDidChangeNotification,
+            object: nil
+        )
+        
+        // 確保在視圖加載後創建鍵盤按鈕
+        DispatchQueue.main.async {
+            // 強制創建鍵盤，而不是等待 viewDidLayoutSubviews
+            self.setupKeyboardLayout()
+            
+            // 設置長按手勢
+            self.setupLongPressGestures()
+        }
+        
+        // 非同步初始化資料庫和載入注音資料
+        DispatchQueue.global(qos: .userInitiated).async {
+            self.initDatabase()
+            
+            DispatchQueue.global(qos: .utility).async {
+                self.loadBopomofoData()
             }
+        }
+    }
+    
+    // 添加視圖大小變化的處理方法
+    @objc func screenDidResize() {
+        // 使用畫面大小判斷方向
+        let currentState = getCurrentDeviceState()
+        
+        // 檢查是否真的發生了狀態變化
+        if currentState != keyboardMetrics.deviceState {
+            print("畫面大小變化偵測到狀態改變: \(keyboardMetrics.deviceState) -> \(currentState)")
+            
+            // 更新鍵盤尺寸參數
+            keyboardMetrics = KeyboardMetrics(deviceState: currentState)
+            
+            // 應用新的尺寸參數
+            applyKeyboardMetrics()
+            
+            // 重新創建鍵盤
+            recreateKeyboard()
         }
     }
     
@@ -243,7 +466,7 @@ class KeyboardViewController: UIInputViewController {
                         key.contains("⇧") || key.contains("dismiss") || key.contains("⌄") ||
                         key.contains("delete") || key.contains("⌫") || key.contains("return") ||
                         key.contains("⏎") || key.contains("🌐") || key.contains("英/中") ||
-                        key == "符號" || key == "ABC" {
+                        key == "符" || key == "ABC" {
                         continue
                     }
                     
@@ -440,49 +663,103 @@ class KeyboardViewController: UIInputViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         
-        // 只有在需要時才創建按鍵，使用延遲確保視圖尺寸已穩定
-            if keyButtons.isEmpty {
-                // 第一次延遲確保尺寸已穩定
-                DispatchQueue.main.async {
-                    if self.keyButtons.isEmpty {
-                        self.createKeyButtons()
-                    }
-                }
-            }
+        // 每次佈局變化時檢查設備狀態
+        let currentState = getCurrentDeviceState()
+        
+        // 檢查是否發生了狀態變化
+        if currentState != keyboardMetrics.deviceState {
+            print("佈局變化偵測到狀態改變: \(keyboardMetrics.deviceState) -> \(currentState)")
+            
+            // 更新鍵盤尺寸參數
+            keyboardMetrics = KeyboardMetrics(deviceState: currentState)
+            
+            // 應用新的尺寸參數
+            applyKeyboardMetrics()
+            
+            // 重新創建鍵盤
+            recreateKeyboard()
+        } else if keyButtons.isEmpty {
+            // 如果按鈕尚未創建（初次加載），立即創建
+            print("按鈕尚未創建，立即創建鍵盤")
+            setupKeyboardLayout()
+        }
     }
     
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
-        print("viewWillTransition: 將轉換到尺寸 \(size)")
         
-        // 在轉場完成後重新創建按鍵
-        coordinator.animate(alongsideTransition: nil) { _ in
-            // 清除現有按鍵
-            for subview in self.keyboardView.subviews {
-                subview.removeFromSuperview()
-            }
-            self.keyButtons.removeAll()
+        // 確定新的設備狀態
+        let isLandscape = size.width > size.height
+        let newState: DeviceState = isIPhone ?
+            (isLandscape ? .iPhoneLandscape : .iPhonePortrait) :
+            (isLandscape ? .iPadLandscape : .iPadPortrait)
+        
+        print("轉變至狀態: \(newState), 按鍵高度將為: \(KeyboardMetrics(deviceState: newState).keyHeight), 候選區高度將為: \(KeyboardMetrics(deviceState: newState).candidateViewHeight)")
+        
+        // 使用 coordinator 進行動畫過渡
+        coordinator.animate(alongsideTransition: { _ in
+            // 更新 keyboardMetrics
+            self.keyboardMetrics = KeyboardMetrics(deviceState: newState)
             
-            // 重新創建按鍵
-            DispatchQueue.main.async {
-                self.createKeyButtons()
-            }
+            // 立即更新候選區高度約束
+            self.candidateViewHeightConstraint.constant = self.keyboardMetrics.candidateViewHeight
+            
+            // 觸發佈局更新
+            self.view.setNeedsLayout()
+        }, completion: { _ in
+            // 動畫完成後，重新創建鍵盤以確保正確的佈局
+            self.recreateKeyboard()
+        })
+    }
+    
+    // 監聽裝置方向變化
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        
+        // 檢查水平和垂直尺寸類別是否有變化
+        if traitCollection.horizontalSizeClass != previousTraitCollection?.horizontalSizeClass ||
+           traitCollection.verticalSizeClass != previousTraitCollection?.verticalSizeClass {
+            
+            screenDidResize()
         }
     }
     
     @objc func keyPressed(_ sender: UIButton) {
         // 檢查是否由長按手勢觸發
-        if let longPress = sender.gestureRecognizers?.first(where: { $0 is UILongPressGestureRecognizer }) as? UILongPressGestureRecognizer,
+        if isTriggeredByLongPress(sender) { return }
+        
+        // 獲取按鍵資訊
+        let (row, col) = getButtonIndices(sender)
+        guard let key = getKeyTitle(row, col) else { return }
+        
+        // 按鍵視覺反饋
+        animateButton(sender)
+        
+        // 處理特殊情況
+        if handleSpecialCase(key) { return }
+        
+        // 處理按鍵類型
+        handleKeyType(key)
+    }
+
+    // 檢查是否由長按觸發
+    private func isTriggeredByLongPress(_ button: UIButton) -> Bool {
+        if let longPress = button.gestureRecognizers?.first(where: { $0 is UILongPressGestureRecognizer }) as? UILongPressGestureRecognizer,
            longPress.state == .began || longPress.state == .changed {
-            // 已被長按手勢處理，不再重複處理
-            return
+            return true
         }
-        
-        // 取得按下的按鍵
-        let row = sender.tag / 100
-        let col = sender.tag % 100
-        
-        // 選擇當前佈局
+        return false
+    }
+
+    // 獲取按鈕索引
+    private func getButtonIndices(_ button: UIButton) -> (Int, Int) {
+        let row = button.tag / 100
+        let col = button.tag % 100
+        return (row, col)
+    }
+
+    // 獲取按鍵標題
+    private func getKeyTitle(_ row: Int, _ col: Int) -> String? {
         let currentLayout: [[String]]
         if isSymbolMode {
             currentLayout = symbolRows
@@ -490,107 +767,129 @@ class KeyboardViewController: UIInputViewController {
             currentLayout = isBoshiamyMode ? boshiamySymbols : keyboardRows
         }
         
-        // 檢查索引是否有效
         guard row < currentLayout.count && col < currentLayout[row].count else {
             print("無效的按鍵索引: row \(row), col \(col)")
-            return
+            return nil
         }
         
-        let key = currentLayout[row][col]
-        
-        // 播放按鍵反饋
-        animateButton(sender)
-        
-        // 檢查是否為「、」符號，觸發同音字反查模式
+        return currentLayout[row][col]
+    }
+
+    // 處理特殊情況
+    private func handleSpecialCase(_ key: String) -> Bool {
+        // 處理同音字反查
         if key == "、" && isBoshiamyMode {
             startHomophoneLookup()
-            return
+            return true
         }
         
-        // 根據同音字反查階段處理按鍵
+        // 處理同音字反查模式下的按鍵
         if isHomophoneLookupMode {
             handleHomophoneLookupKeyPress(key)
-            return
+            return true
         }
         
-        // 處理特殊按鍵
+        return false
+    }
+
+    // 處理按鍵類型
+    private func handleKeyType(_ key: String) {
+        // 輸入模式切換
         if key.contains("中") || key.contains("英") {
             toggleInputMode()
-        } else if key == "符號" {
+        }
+        // 符號模式切換
+        else if key == "符" {
             toggleSymbolMode()
-        } else if key == "ABC" {
-            // 從符號模式返回到原模式
+        }
+        // 從符號模式返回
+        else if key == "ABC" {
             isSymbolMode = false
             recreateKeyboard()
-        } else if key.contains("space") || key.contains("空白鍵") || key.contains("  　") {
-            // 處理空白鍵
-            if isBoshiamyMode && !collectedRoots.isEmpty {
-                if !candidateButtons.isEmpty {
-                    // 如果有候選字，選擇第一個候選字
-                    if let firstCandidateButton = candidateButtons.first {
-                        candidateSelected(firstCandidateButton)
-                    }
-                } else {
-                    // 如果沒有候選字但有輸入的字根，清除字根
-                    collectedRoots = ""
-                    updateInputCodeDisplay("")
-                    displayCandidates([])
-                }
-            } else {
-                // 普通空白鍵行為
-                textDocumentProxy.insertText(" ")
-            }
-        } else if key.contains("shift") || key.contains("⇧") {
+        }
+        // 空格鍵
+        else if key.contains("space") || key.contains("空白鍵") || key.contains("  　") {
+            handleSpaceKey()
+        }
+        // Shift鍵
+        else if key.contains("shift") || key.contains("⇧") {
             toggleShift()
-        } else if key.contains("🌐") || key.contains("⌄") {
+        }
+        // 切換鍵盤
+        else if key.contains("🌐") || key.contains("⌄") {
             dismissKeyboard()
-        } else if key.contains("delete") || key.contains("⌫") {
-            if isBoshiamyMode && !collectedRoots.isEmpty {
-                // 如果在嘸蝦米模式下並且有收集的字根，則刪除最後一個字根
-                collectedRoots = String(collectedRoots.dropLast())
-                
-                // 更新輸入字碼顯示
-                updateInputCodeDisplay(collectedRoots)
-                
-                // 重新查詢候選字
-                if collectedRoots.isEmpty {
-                    // 如果沒有輸入的字根了，清空候選字區域
-                    displayCandidates([])
-                } else {
-                    // 否則，查詢新的候選字
-                    let candidates = lookupBoshiamyDictionary(collectedRoots)
-                    displayCandidates(candidates)
-                }
-            } else {
-                // 只有在沒有收集的字根時，才刪除文本
-                textDocumentProxy.deleteBackward()
-            }
-        } else if key.contains("return") || key.contains("⏎") {
+        }
+        // 刪除鍵
+        else if key.contains("delete") || key.contains("⌫") {
+            handleDeleteKey()
+        }
+        // 回車鍵
+        else if key.contains("return") || key.contains("⏎") {
             textDocumentProxy.insertText("\n")
-        } else {
-            // 一般按鍵，根據模式進行處理
-            if isSymbolMode {
-                // 符號模式下直接輸入符號
-                textDocumentProxy.insertText(key)
-            } else if isBoshiamyMode {
-                // 嘸蝦米模式下的處理
-                // 取出嘸蝦米符號（排除空格和數字部分）
-                let cleanKey = key.components(separatedBy: " ").first ?? key
-                handleBoshiamyInput(cleanKey)
+        }
+        // 一般按鍵
+        else {
+            handleRegularKey(key)
+        }
+    }
+
+    // 處理空格鍵
+    private func handleSpaceKey() {
+        if isBoshiamyMode && !collectedRoots.isEmpty {
+            if !candidateButtons.isEmpty, let firstCandidateButton = candidateButtons.first {
+                candidateSelected(firstCandidateButton)
             } else {
-                // 英文模式下的處理
-                let inputChar = key.first.map(String.init) ?? ""
-                let inputText = isShifted && inputChar.count == 1 && (inputChar >= "a" && inputChar <= "z") ?
-                inputChar.uppercased() : inputChar
-                textDocumentProxy.insertText(inputText)
-                
-                // 如果是臨時大寫狀態（不是鎖定大寫），則在輸入一個字符後重置
-                if isShifted && !isShiftLocked {
-                    isShifted = false
-                    updateShiftButtonAppearance()
-                    updateLetterKeysForShiftState()
-                }
+                collectedRoots = ""
+                updateInputCodeDisplay("")
+                displayCandidates([])
             }
+        } else {
+            textDocumentProxy.insertText(" ")
+        }
+    }
+
+    // 處理刪除鍵
+    private func handleDeleteKey() {
+        if isBoshiamyMode && !collectedRoots.isEmpty {
+            collectedRoots = String(collectedRoots.dropLast())
+            updateInputCodeDisplay(collectedRoots)
+            
+            if collectedRoots.isEmpty {
+                displayCandidates([])
+            } else {
+                let candidates = lookupBoshiamyDictionary(collectedRoots)
+                displayCandidates(candidates)
+            }
+        } else {
+            textDocumentProxy.deleteBackward()
+        }
+    }
+
+    // 處理一般按鍵
+    private func handleRegularKey(_ key: String) {
+        if isSymbolMode {
+            textDocumentProxy.insertText(key)
+        } else if isBoshiamyMode {
+            let cleanKey = key.components(separatedBy: " ").first ?? key
+            handleBoshiamyInput(cleanKey)
+        } else {
+            handleEnglishInput(key)
+        }
+    }
+
+    // 處理英文輸入
+    private func handleEnglishInput(_ key: String) {
+        let inputChar = key.first.map(String.init) ?? ""
+        let inputText = isShifted && inputChar.count == 1 && (inputChar >= "a" && inputChar <= "z") ?
+            inputChar.uppercased() : inputChar
+        
+        textDocumentProxy.insertText(inputText)
+        
+        // 臨時大寫後重置
+        if isShifted && !isShiftLocked {
+            isShifted = false
+            updateShiftButtonAppearance()
+            updateLetterKeysForShiftState()
         }
     }
 
@@ -729,16 +1028,40 @@ class KeyboardViewController: UIInputViewController {
 
     
     // 重新建立整個鍵盤
+    
     private func recreateKeyboard() {
+        print("重新創建鍵盤 - 當前設備狀態: \(keyboardMetrics.deviceState), 按鍵高度: \(keyboardMetrics.keyHeight), 候選區高度: \(keyboardMetrics.candidateViewHeight)")
+        
         // 清除現有按鍵
-        for subview in keyboardView.subviews {
-            subview.removeFromSuperview()
-        }
+        keyboardView.subviews.forEach { $0.removeFromSuperview() }
         keyButtons.removeAll()
+        
+        // 先移除所有與 keyboardView 相關的高度約束
+        for constraint in view.constraints {
+            if let firstItem = constraint.firstItem as? NSObject,
+               firstItem == keyboardView && constraint.firstAttribute == .height {
+                view.removeConstraint(constraint)
+            }
+        }
+        
+        // 根據設備狀態設定適當的高度約束
+        if keyboardMetrics.deviceState == .iPhoneLandscape {
+            // iPhone 橫屏模式 - 使用螢幕高度的固定比例
+            let screenHeight = UIScreen.main.bounds.height
+            let keyboardHeight = screenHeight * 0.45 // 調整為所需比例
+            let heightConstraint = keyboardView.heightAnchor.constraint(equalToConstant: keyboardHeight)
+            heightConstraint.isActive = true
+        } else {
+            // 其他模式 - 如果需要特定高度約束，可以在這裡添加
+        }
+        
+        // 更新佈局
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
         
         // 重新創建按鍵
         DispatchQueue.main.async {
-            self.createKeyButtons()
+            self.setupKeyboardLayout()
         }
     }
     
@@ -933,57 +1256,14 @@ class KeyboardViewController: UIInputViewController {
     }
     
     //--------------------side buttons-------------------
-    // 5. 修改 createKeyButtons 方法，根據設備類型調整鍵盤佈局
-    private func createKeyButtons() {
+    // 5. 修改 setupKeyboardLayout 方法，根據設備類型調整鍵盤佈局
+    private func setupKeyboardLayout() {
         print("創建按鍵 - \(isSymbolMode ? "符號模式" : (isBoshiamyMode ? "嘸蝦米模式" : "英文模式"))")
+        print("當前設備狀態: \(keyboardMetrics.deviceState), 按鍵高度: \(keyboardMetrics.keyHeight)")
         
-        // 儲存初始鍵盤尺寸和方向（只做一次）
-        if !initialKeyboardMetricsSet {
-            initialKeyboardWidth = view.bounds.width
-            initialKeyboardHeight = view.bounds.height
-            initialIsLandscape = initialKeyboardWidth > initialKeyboardHeight
-            initialKeyboardMetricsSet = true
-            print("儲存初始鍵盤尺寸: \(initialKeyboardWidth) x \(initialKeyboardHeight), 是否橫向: \(initialIsLandscape)")
-        }
-        
-        // 使用儲存的初始尺寸判斷，而不是當前視圖尺寸
-        let isLandscape = initialIsLandscape
-        let isIPhonePortrait = isIPhone && !isLandscape
-        
-        // 設定字型大小 - 在此處統一設定，不論是何種模式
-        if isIPhonePortrait {
-            titleFontSize = 8   // iPhone 直式模式使用更小的次要標籤字型
-            subtitleFontSize = 14 // iPhone 直式模式使用更大的主要標籤字型 (增加了字體大小)
-        } else if isLandscape {
-            titleFontSize = 10
-            subtitleFontSize = 16
-        } else {
-            //ipad直
-            titleFontSize = 12
-            subtitleFontSize = 22
-        }
-        
-        // 根據設備類型和方向調整間距和邊距
-        let buttonSpacing: CGFloat
-        let rowSpacing: CGFloat
-        let keyboardPadding: CGFloat
-        
-        if isIPhonePortrait {
-            // iPhone 直式模式下的優化設定
-            buttonSpacing = 3  // 更小的按鈕間距
-            rowSpacing = 4     // 更小的行間距
-            keyboardPadding = 3  // 更小的邊距
-        } else if isLandscape {
-            // 橫向模式設定
-            buttonSpacing = 4
-            rowSpacing = 4
-            keyboardPadding = 6
-        } else {
-            // 其他情況（iPad等）
-            buttonSpacing = 4
-            rowSpacing = 8
-            keyboardPadding = 5
-        }
+        // 確保已經清除現有按鍵
+        keyboardView.subviews.forEach { $0.removeFromSuperview() }
+        keyButtons.removeAll()
         
         // 選擇當前佈局和次要標籤
         let currentLayout: [[String]]
@@ -997,11 +1277,38 @@ class KeyboardViewController: UIInputViewController {
             currentSecondaryLabels = isBoshiamyMode ? boshiamySecondaryLabels : secondaryLabels
         }
         
+        // 使用尺寸參數
+        let buttonSpacing = keyboardMetrics.buttonSpacing
+        let rowSpacing = keyboardMetrics.rowSpacing
+        let keyboardPadding = keyboardMetrics.keyboardPadding
+        
+        // 在 iPhone 橫屏模式或直式模式下，跳過數字鍵行
+        let skipNumberRow = (keyboardMetrics.deviceState == .iPhonePortrait || keyboardMetrics.deviceState == .iPhoneLandscape) && !isSymbolMode
+        
+        // 關鍵修改：在 iPhone 橫屏模式下，調整鍵盤視圖的高度
+        if keyboardMetrics.deviceState == .iPhoneLandscape {
+            // 調整 keyboardView 的高度約束
+            for constraint in view.constraints {
+                if let firstItem = constraint.firstItem as? UIView,
+                   firstItem == keyboardView,
+                   constraint.firstAttribute == .height {
+                    // 移除現有的高度約束
+                    view.removeConstraint(constraint)
+                    break
+                }
+            }
+            
+            // 添加新的高度約束，使鍵盤高度為螢幕高度的 50%
+            let screenHeight = UIScreen.main.bounds.height
+            let desiredKeyboardHeight = screenHeight * 0.5 - keyboardMetrics.candidateViewHeight
+            keyboardView.heightAnchor.constraint(equalToConstant: desiredKeyboardHeight).isActive = true
+        }
+        
         // 創建主容器
         let mainHorizontalStackView = UIStackView()
         mainHorizontalStackView.axis = .horizontal
         mainHorizontalStackView.distribution = .fill
-        mainHorizontalStackView.spacing = buttonSpacing  // 使用調整後的間距
+        mainHorizontalStackView.spacing = buttonSpacing
         mainHorizontalStackView.translatesAutoresizingMaskIntoConstraints = false
         keyboardView.addSubview(mainHorizontalStackView)
         
@@ -1013,146 +1320,257 @@ class KeyboardViewController: UIInputViewController {
             mainHorizontalStackView.bottomAnchor.constraint(equalTo: keyboardView.bottomAnchor, constant: -keyboardPadding)
         ])
         
-        
-        
         // 創建主鍵盤容器
         let mainKeyboardStackView = UIStackView()
         mainKeyboardStackView.axis = .vertical
-        mainKeyboardStackView.distribution = .fill
-        mainKeyboardStackView.spacing = rowSpacing  // 使用調整後的行間距
+        mainKeyboardStackView.distribution = .fillEqually // 改回 fillEqually 使所有行高度相等
+        mainKeyboardStackView.spacing = rowSpacing
         mainKeyboardStackView.translatesAutoresizingMaskIntoConstraints = false
         mainHorizontalStackView.addArrangedSubview(mainKeyboardStackView)
         
-        // 逐行創建主鍵盤按鍵
-        keyButtons.removeAll() // 清空現有按鍵
+        
         
         for (rowIndex, row) in currentLayout.enumerated() {
-            // 在 iPhone 直式模式下跳過數字鍵行（第一行），除非是符號模式
-            if isIPhonePortrait && rowIndex == 0 && !isSymbolMode {
+            // 跳過不需要的行
+            if skipNumberRow && rowIndex == 0 {
                 continue
             }
             
+            // 檢查是否為最後一行（特殊處理）
+            let isLastRow = rowIndex == currentLayout.count - 1
+            
+            // 創建行堆疊視圖
             let rowStackView = UIStackView()
             rowStackView.axis = .horizontal
-            
-            // 添加高度約束，可以為不同行設定不同高度
-            let rowHeight: CGFloat
-            if rowIndex == currentLayout.count - 1 {
-                rowHeight = isIPhonePortrait ? 65 : 80  // 最後一行高度，iPhone直式時更高
-            } else {
-                rowHeight = isIPhonePortrait ? 65 : 80  // 其他行高度，iPhone直式時更高
-            }
-            rowStackView.heightAnchor.constraint(equalToConstant: rowHeight).isActive = true
-            
-            rowStackView.spacing = buttonSpacing  // 使用調整後的按鈕間距
+            rowStackView.distribution = .fill  // 使用 .fill 允許不同寬度
+            rowStackView.spacing = buttonSpacing
             rowStackView.translatesAutoresizingMaskIntoConstraints = false
+            
+            // 明確設置行高度，使用 keyboardMetrics.keyHeight
+            rowStackView.heightAnchor.constraint(equalToConstant: keyboardMetrics.keyHeight).isActive = true
             
             var rowButtons = [UIButton]()
             
+            // 如果是普通行，先計算按鈕的標準寬度
+            var standardWidth: CGFloat = 0
+            if !isLastRow {
+                standardWidth = (keyboardView.bounds.width - (2 * keyboardPadding) - ((CGFloat(row.count) - 1) * buttonSpacing)) / CGFloat(row.count)
+            }
+            
             for (keyIndex, keyTitle) in row.enumerated() {
-                // 如果是最後一行的功能鍵（符號/ABC）且是iPhone直式模式，考慮跳過它們
-                if isIPhonePortrait && rowIndex == currentLayout.count - 1 && (keyTitle == "符號" || keyTitle == "ABC") {
-                    // 在iPhone直式模式下，通過底部的按鈕切換，而不是鍵盤上的鍵
-                    // 這裡我們保留這些按鍵，因為底部按鈕是額外添加的
-                }
-                
                 // 創建按鈕
-                let button = UIButton(type: .system)
-                button.layer.cornerRadius = isIPhonePortrait ? 4 : 5  // 調整按鈕圓角
-                button.layer.borderWidth = isIPhonePortrait ? 0.3 : 0.5
-                button.layer.borderColor = UIColor.darkGray.cgColor
-                button.tag = rowIndex * 100 + keyIndex
-                button.addTarget(self, action: #selector(keyPressed(_:)), for: .touchUpInside)
+                let button = configureKeyButton(keyTitle: keyTitle, rowIndex: rowIndex, keyIndex: keyIndex, currentSecondaryLabels: currentSecondaryLabels)
                 button.translatesAutoresizingMaskIntoConstraints = false
-                
-                // 使用 UIButtonConfiguration 設置按鈕樣式
-                var config = UIButton.Configuration.plain()
-                config.baseForegroundColor = UIColor.black
-                config.background.backgroundColor = UIColor.white
-                
-                // 特殊按鍵使用不同背景色
-                if (keyTitle == "符號" || keyTitle == "ABC" ||
-                    keyTitle.contains("中") || keyTitle.contains("英") ||
-                    keyTitle.contains("🌐")) {
-                    config.background.backgroundColor = UIColor(white: 0.9, alpha: 1.0)
-                }
-                
-                // 添加次要標籤（如果有且不是 iPhone）
-                if rowIndex < currentSecondaryLabels.count && keyIndex < currentSecondaryLabels[rowIndex].count {
-                    let secondaryText = currentSecondaryLabels[rowIndex][keyIndex]
-                    if !secondaryText.isEmpty && !isIPhone {
-                        // 只有在非 iPhone 設備上才顯示次要標籤
-                        config.titleAlignment = .center
-                        config.title = secondaryText
-                        config.subtitle = keyTitle
-                        config.titlePadding = 2
-                        
-                        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
-                            var outgoing = incoming
-                            outgoing.font = UIFont.systemFont(ofSize: self.titleFontSize)
-                            outgoing.foregroundColor = UIColor.darkGray
-                            return outgoing
-                        }
-                        
-                        config.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
-                            var outgoing = incoming
-                            outgoing.font = UIFont.systemFont(ofSize: self.subtitleFontSize)
-                            return outgoing
-                        }
-                    } else {
-                        // iPhone 設備或沒有次要標籤
-                        config.title = keyTitle
-                        
-                        // 根據設備類型和方向設置字型大小
-                        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
-                            var outgoing = incoming
-                            outgoing.font = UIFont.systemFont(ofSize: self.subtitleFontSize)
-                            return outgoing
-                        }
-                    }
-                } else {
-                    config.title = keyTitle
-                    
-                    // 根據設備類型和方向設置字型大小
-                    config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
-                        var outgoing = incoming
-                        outgoing.font = UIFont.systemFont(ofSize: self.subtitleFontSize)
-                        return outgoing
-                    }
-                }
-                
-                button.configuration = config
-                
-                // 特別處理空格鍵
-                if (keyTitle.contains("space") || keyTitle.contains("空白鍵")){
-                    // 空格鍵設置低優先級，讓它佔據剩餘空間
-                    button.setContentHuggingPriority(.defaultLow - 100, for: .horizontal)
-                    button.setContentCompressionResistancePriority(.defaultLow - 100, for: .horizontal)
-                } else {
-                    // 其他按鍵設置高優先級
-                    button.setContentHuggingPriority(.defaultHigh, for: .horizontal)
-                    button.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
-                }
-                
-                // 添加到堆疊視圖和數組
                 rowStackView.addArrangedSubview(button)
                 rowButtons.append(button)
+                
+                // 為普通行的按鈕設置相同寬度
+                if !isLastRow {
+                    button.widthAnchor.constraint(equalToConstant: standardWidth).isActive = true
+                }
             }
             
             // 添加這一行到主鍵盤堆疊視圖
             mainKeyboardStackView.addArrangedSubview(rowStackView)
             keyButtons.append(rowButtons)
+            
+            // 只在最後添加最後一行的按鍵後設置其特殊寬度
+            if isLastRow {
+                // 延遲處理，確保視圖已經加載
+                DispatchQueue.main.async {
+                    self.configureLastRowWidths(buttons: rowButtons)
+                }
+            }
         }
-        
         
         // 在鍵盤創建完成後設置長按手勢
         DispatchQueue.main.async {
             self.setupLongPressGestures()
-            
-            // 調整最後一行按鍵寬度 - 讓空格鍵更寬
-            self.adjustLastRowButtonWidths()
         }
     }
+    
+    // 專門用於配置最後一行按鈕寬度的方法
+    private func configureLastRowWidths(buttons: [UIButton]) {
+        // 獲取可用寬度
+        let availableWidth = keyboardView.bounds.width - (keyboardMetrics.keyboardPadding * 2)
+        let buttonSpacing = keyboardMetrics.buttonSpacing
+        let totalSpacing = buttonSpacing * CGFloat(buttons.count - 1)
+        
+        // 清除現有的寬度約束
+        for button in buttons {
+            for constraint in button.constraints {
+                if constraint.firstAttribute == .width {
+                    button.removeConstraint(constraint)
+                }
+            }
+        }
+        
+        // 空白鍵設置為佔總寬度的 60%
+        let spaceKeyWidthRatio: CGFloat = 0.6
+        
+        // 找出空白鍵的索引
+        var spaceKeyIndex = -1
+        for (index, button) in buttons.enumerated() {
+            let buttonTitle = button.title(for: .normal) ?? ""
+            print("按鈕 \(index) 標題: \(buttonTitle)")
+            
+            if buttonTitle.contains("space") || buttonTitle.contains("空白") {
+                spaceKeyIndex = index
+                break
+            }
+        }
+        
+        // 如果找不到空白鍵，則默認為第二個按鈕 (索引1)
+        if spaceKeyIndex == -1 {
+            spaceKeyIndex = 1
+            print("無法找到空白鍵，默認使用索引1")
+        }
+        
+        print("空白鍵索引: \(spaceKeyIndex)")
+        
+        // 計算各按鈕寬度
+        let spaceKeyWidth = (availableWidth - totalSpacing) * spaceKeyWidthRatio
+        let functionKeyWidth = ((availableWidth - totalSpacing) * (1 - spaceKeyWidthRatio)) / CGFloat(buttons.count - 1)
+        
+        // 應用新的寬度約束 - 使用非常高的優先級
+        for (index, button) in buttons.enumerated() {
+            if index == spaceKeyIndex {
+                // 空白鍵
+                let constraint = button.widthAnchor.constraint(equalToConstant: spaceKeyWidth)
+                constraint.priority = .required
+                constraint.isActive = true
+                print("設置空白鍵寬度: \(spaceKeyWidth)")
+            } else {
+                // 功能鍵
+                let constraint = button.widthAnchor.constraint(equalToConstant: functionKeyWidth)
+                constraint.priority = .required
+                constraint.isActive = true
+                print("設置功能鍵寬度: \(functionKeyWidth)")
+            }
+        }
+        
+        // 強制更新佈局
+        self.keyboardView.layoutIfNeeded()
+    }
+    
+    private func configureKeyButton(keyTitle: String, rowIndex: Int, keyIndex: Int, currentSecondaryLabels: [[String]]) -> UIButton {
+        let button = UIButton(type: .system)
+        button.layer.cornerRadius = 4
+        button.layer.borderWidth = 0.5
+        button.layer.borderColor = UIColor.darkGray.cgColor
+        button.tag = rowIndex * 100 + keyIndex
+        button.addTarget(self, action: #selector(keyPressed(_:)), for: .touchUpInside)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        
+        // 使用 UIButtonConfiguration 設置按鈕樣式
+        var config = UIButton.Configuration.plain()
+        config.baseForegroundColor = UIColor.black
+        config.background.backgroundColor = UIColor.white
+        
+        // 特殊按鍵使用不同背景色
+        if (keyTitle == "符" || keyTitle == "ABC" ||
+            keyTitle.contains("中") || keyTitle.contains("英") ||
+            keyTitle.contains("🌐")) {
+            config.background.backgroundColor = UIColor(white: 0.9, alpha: 1.0)
+        }
+        
+        // 添加次要標籤（如果有且不是 iPhone）
+        if rowIndex < currentSecondaryLabels.count && keyIndex < currentSecondaryLabels[rowIndex].count {
+            let secondaryText = currentSecondaryLabels[rowIndex][keyIndex]
+            if !secondaryText.isEmpty &&
+               keyboardMetrics.deviceState != .iPhonePortrait &&
+               keyboardMetrics.deviceState != .iPhoneLandscape {
+                // 只有在非 iPhone 直式模式設備上才顯示次要標籤
+                config.titleAlignment = .center
+                config.title = secondaryText
+                config.subtitle = keyTitle
+                config.titlePadding = 2
+                
+                config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+                    var outgoing = incoming
+                    outgoing.font = UIFont.systemFont(ofSize: self.keyboardMetrics.titleFontSize)
+                    outgoing.foregroundColor = UIColor.darkGray
+                    return outgoing
+                }
+                
+                config.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+                    var outgoing = incoming
+                    outgoing.font = UIFont.systemFont(ofSize: self.keyboardMetrics.subtitleFontSize)
+                    return outgoing
+                }
+            } else {
+                // iPhone 直式模式或沒有次要標籤
+                config.title = keyTitle
+                
+                config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+                    var outgoing = incoming
+                    outgoing.font = UIFont.systemFont(ofSize: self.keyboardMetrics.subtitleFontSize)
+                    return outgoing
+                }
+            }
+        } else {
+            config.title = keyTitle
+            
+            config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+                var outgoing = incoming
+                outgoing.font = UIFont.systemFont(ofSize: self.keyboardMetrics.subtitleFontSize)
+                return outgoing
+            }
+        }
+        
+        button.configuration = config
+        // 添加這段代碼：明確設置按鈕高度
+        button.heightAnchor.constraint(equalToConstant: keyboardMetrics.keyHeight).isActive = true
+            
+        return button
+    }
+
+    // 輔助方法：判斷是否為特殊按鍵
+    private func isSpecialKey(_ keyTitle: String) -> Bool {
+        return keyTitle == "符" || keyTitle == "ABC" ||
+               keyTitle.contains("中") || keyTitle.contains("英") ||
+               keyTitle.contains("🌐")
+    }
+
+    // 輔助方法：獲取次要標籤文字
+    private func getSecondaryText(_ rowIndex: Int, _ keyIndex: Int, _ labels: [[String]]) -> String? {
+        guard rowIndex < labels.count && keyIndex < labels[rowIndex].count else { return nil }
+        return labels[rowIndex][keyIndex]
+    }
+
+    // 輔助方法：設置雙標籤按鈕
+    private func setupDualLabelButton(_ config: inout UIButton.Configuration, title: String, subtitle: String) {
+        config.titleAlignment = .center
+        config.title = title
+        config.subtitle = subtitle
+        config.titlePadding = 2
+        
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var outgoing = incoming
+            outgoing.font = UIFont.systemFont(ofSize: self.keyboardMetrics.titleFontSize)
+            outgoing.foregroundColor = UIColor.darkGray
+            return outgoing
+        }
+        
+        config.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var outgoing = incoming
+            outgoing.font = UIFont.systemFont(ofSize: self.keyboardMetrics.subtitleFontSize)
+            return outgoing
+        }
+    }
+
+    // 輔助方法：設置單標籤按鈕
+    private func setupSingleLabelButton(_ config: inout UIButton.Configuration, title: String) {
+        config.title = title
+        
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var outgoing = incoming
+            outgoing.font = UIFont.systemFont(ofSize: self.keyboardMetrics.subtitleFontSize)
+            return outgoing
+        }
+    }
+    
+    
     
     // 6. 為iPhone直式模式創建簡化的右側欄
     private func createSimpleSideColumn(isLandscape: Bool, width: CGFloat) -> UIStackView {
@@ -1202,80 +1620,11 @@ class KeyboardViewController: UIInputViewController {
         return columnStackView
     }
 
-   
-
-    
-    // 然後添加一個新的方法用於調整最後一行按鍵寬度
-    private func adjustLastRowButtonWidths() {
-        // 確保鍵盤已經創建且有最後一行
-        guard !keyButtons.isEmpty, let lastRowButtons = keyButtons.last else {
-            return
-        }
-        
-        // 獲取視圖當前的實際寬度
-        let keyboardWidth = keyboardView.bounds.width
-        if keyboardWidth <= 0 {
-            // 視圖寬度不正確，再次延遲
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                self.adjustLastRowButtonWidths()
-            }
-            return
-        }
-        
-        // 計算按鍵寬度 - 不再使用標準按鍵作為參考
-        let isLandscape = view.bounds.width > view.bounds.height
-        let buttonSpacing: CGFloat = isLandscape ? 4.0 : 3.0
-        let availableWidth = keyboardWidth - 16.0  // 減去左右邊距
-        
-        // 檢查最後一行按鈕數量
-        let buttonCount = lastRowButtons.count
-        
-        // 首先移除所有現有的寬度約束
-        for button in lastRowButtons {
-            button.constraints.forEach { constraint in
-                if constraint.firstAttribute == .width {
-                    button.removeConstraint(constraint)
-                }
-            }
-        }
-        
-        if buttonCount == 4 {  // 四按鈕布局: [🌐][space][符號][中/英]
-            // 計算總間距
-            let totalSpacing = buttonSpacing * 3  // 3個間隔
-            
-            // 功能鍵寬度 - 每個佔總寬度的12%
-            let functionKeyWidth = availableWidth * 0.12
-            
-            // 空格鍵寬度 - 剩餘空間
-            let spaceKeyWidth = availableWidth - (functionKeyWidth * 3) - totalSpacing
-            
-            // 設置寬度約束
-            lastRowButtons[0].widthAnchor.constraint(equalToConstant: functionKeyWidth).isActive = true  // 🌐
-            lastRowButtons[1].widthAnchor.constraint(equalToConstant: spaceKeyWidth).isActive = true     // space
-            lastRowButtons[2].widthAnchor.constraint(equalToConstant: functionKeyWidth).isActive = true  // 符號
-            lastRowButtons[3].widthAnchor.constraint(equalToConstant: functionKeyWidth).isActive = true  // 中/英
-            
-            print("調整後的空格鍵寬度: \(spaceKeyWidth), 功能鍵寬度: \(functionKeyWidth)")
-        } else if buttonCount == 3 {  // 符號鍵盤的三按鈕布局: [🌐][space][ABC]
-            // 計算總間距
-            let totalSpacing = buttonSpacing * 2  // 2個間隔
-            
-            // 功能鍵寬度 - 每個佔總寬度的15%
-            let functionKeyWidth = availableWidth * 0.15
-            
-            // 空格鍵寬度 - 剩餘空間
-            let spaceKeyWidth = availableWidth - (functionKeyWidth * 2) - totalSpacing
-            
-            // 設置寬度約束
-            lastRowButtons[0].widthAnchor.constraint(equalToConstant: functionKeyWidth).isActive = true  // 🌐
-            lastRowButtons[1].widthAnchor.constraint(equalToConstant: spaceKeyWidth).isActive = true     // space
-            lastRowButtons[2].widthAnchor.constraint(equalToConstant: functionKeyWidth).isActive = true  // ABC
-            
-            print("調整後的空格鍵寬度: \(spaceKeyWidth), 功能鍵寬度: \(functionKeyWidth)")
-        }
-        
-        // 強制更新佈局
-        keyboardView.layoutIfNeeded()
+    // 幫助函數：添加寬度約束
+    private func addWidthConstraint(to button: UIButton, width: CGFloat) {
+        let constraint = button.widthAnchor.constraint(equalToConstant: width)
+        constraint.priority = .defaultHigh
+        constraint.isActive = true
     }
     
     
@@ -1379,30 +1728,22 @@ class KeyboardViewController: UIInputViewController {
     }
     // 新增 - 處理長按刪除手勢
     @objc func handleLongPressDelete(_ gesture: UILongPressGestureRecognizer) {
-        switch gesture.state {
-        case .began:
-            // 開始長按，啟動連續刪除
-            isLongPressDeleteActive = true
+        isLongPressDeleteActive = (gesture.state == .began)
+        
+        if isLongPressDeleteActive {
             startDeleteTimer()
-        case .ended, .cancelled, .failed:
-            // 結束長按，停止連續刪除
-            isLongPressDeleteActive = false
+        } else {
             stopDeleteTimer()
-        default:
-            break
         }
     }
 
     // 新增 - 啟動刪除定時器
     private func startDeleteTimer() {
-        // 先停止可能已存在的定時器
-        stopDeleteTimer()
-        
-        // 建立新的定時器，每0.1秒執行一次刪除操作
+        stopDeleteTimer() // 先停止可能已存在的定時器
         deleteTimer = Timer.scheduledTimer(timeInterval: 0.1, target: self, selector: #selector(timerDeleteAction), userInfo: nil, repeats: true)
     }
 
-    // 新增 - 停止刪除定時器
+    // 簡化停止刪除定時器
     private func stopDeleteTimer() {
         deleteTimer?.invalidate()
         deleteTimer = nil
@@ -1493,12 +1834,14 @@ class KeyboardViewController: UIInputViewController {
     }
     
     // 查詢字典方法 - 直接從內存字典查詢
+    // 在按需查詢字典時加入檢查
     func lookupBoshiamyDictionary(_ roots: String) -> [String] {
         let startTime = CFAbsoluteTimeGetCurrent()
         var results = [String]()
         
+        // 如果資料庫還沒初始化完成，返回空結果
         guard let db = database, db.isOpen else {
-            print("資料庫未開啟")
+            print("資料庫未開啟或尚未初始化完成")
             return results
         }
         
@@ -1585,71 +1928,85 @@ class KeyboardViewController: UIInputViewController {
         }
     }
     deinit {
+        // 移除通知觀察者
+        NotificationCenter.default.removeObserver(self)
+        
         database?.close()
     }
     //------------同音字反查
     // 2. 加載注音數據的方法
-       func loadBopomofoData() {
-           print("開始載入注音資料...")
-           
-           // 載入 bopomofo.csv (字 -> 注音)
-           if let bopomofoPath = Bundle.main.path(forResource: "bopomofo", ofType: "csv") {
-               do {
-                   let content = try String(contentsOfFile: bopomofoPath, encoding: .utf8)
-                   let rows = content.components(separatedBy: .newlines)
-                   
-                   for row in rows where !row.isEmpty {
-                       let columns = row.components(separatedBy: ",")
-                       if columns.count >= 3 {
-                           // 格式: id,字,注音
-                           let character = columns[1].trimmingCharacters(in: .whitespacesAndNewlines)
-                           let bopomofo = columns[2].trimmingCharacters(in: .whitespacesAndNewlines)
-                           
-                           if !character.isEmpty && !bopomofo.isEmpty {
-                               if bopomofoDictionary[character] == nil {
-                                   bopomofoDictionary[character] = [bopomofo]
-                               } else {
-                                   bopomofoDictionary[character]?.append(bopomofo)
-                               }
-                           }
-                       }
-                   }
-                   
-                   print("從bopomofo.csv載入了 \(bopomofoDictionary.count) 個字的注音")
-               } catch {
-                   print("讀取bopomofo.csv失敗: \(error)")
-               }
-           }
-           
-           // 載入 bopomospell.csv (注音 -> 同音字)
-           if let bopomospellPath = Bundle.main.path(forResource: "bopomospell", ofType: "csv") {
-               do {
-                   let content = try String(contentsOfFile: bopomospellPath, encoding: .utf8)
-                   let rows = content.components(separatedBy: .newlines)
-                   
-                   for row in rows where !row.isEmpty {
-                       let columns = row.components(separatedBy: ",")
-                       if columns.count >= 3 {
-                           // 格式: id,注音,字
-                           let bopomofo = columns[1].trimmingCharacters(in: .whitespacesAndNewlines)
-                           let character = columns[2].trimmingCharacters(in: .whitespacesAndNewlines)
-                           
-                           if !bopomofo.isEmpty && !character.isEmpty {
-                               if bopomospellDictionary[bopomofo] == nil {
-                                   bopomospellDictionary[bopomofo] = [character]
-                               } else {
-                                   bopomospellDictionary[bopomofo]?.append(character)
-                               }
-                           }
-                       }
-                   }
-                   
-                   print("從bopomospell.csv載入了 \(bopomospellDictionary.count) 個注音的同音字")
-               } catch {
-                   print("讀取bopomospell.csv失敗: \(error)")
-               }
-           }
-       }
+    func loadBopomofoData() {
+        print("開始載入注音資料...")
+        
+        // 為避免多執行緒問題，創建臨時字典
+        var tempBopomofoDictionary: [String: [String]] = [:]
+        var tempBopomospellDictionary: [String: [String]] = [:]
+        
+        // 載入 bopomofo.csv (字 -> 注音)
+        if let bopomofoPath = Bundle.main.path(forResource: "bopomofo", ofType: "csv") {
+            do {
+                let content = try String(contentsOfFile: bopomofoPath, encoding: .utf8)
+                let rows = content.components(separatedBy: .newlines)
+                
+                for row in rows where !row.isEmpty {
+                    let columns = row.components(separatedBy: ",")
+                    if columns.count >= 3 {
+                        // 格式: id,字,注音
+                        let character = columns[1].trimmingCharacters(in: .whitespacesAndNewlines)
+                        let bopomofo = columns[2].trimmingCharacters(in: .whitespacesAndNewlines)
+                        
+                        if !character.isEmpty && !bopomofo.isEmpty {
+                            if tempBopomofoDictionary[character] == nil {
+                                tempBopomofoDictionary[character] = [bopomofo]
+                            } else {
+                                tempBopomofoDictionary[character]?.append(bopomofo)
+                            }
+                        }
+                    }
+                }
+                
+                print("從bopomofo.csv載入了 \(tempBopomofoDictionary.count) 個字的注音")
+            } catch {
+                print("讀取bopomofo.csv失敗: \(error)")
+            }
+        }
+        
+        // 載入 bopomospell.csv (注音 -> 同音字)
+        if let bopomospellPath = Bundle.main.path(forResource: "bopomospell", ofType: "csv") {
+            do {
+                let content = try String(contentsOfFile: bopomospellPath, encoding: .utf8)
+                let rows = content.components(separatedBy: .newlines)
+                
+                for row in rows where !row.isEmpty {
+                    let columns = row.components(separatedBy: ",")
+                    if columns.count >= 3 {
+                        // 格式: id,注音,字
+                        let bopomofo = columns[1].trimmingCharacters(in: .whitespacesAndNewlines)
+                        let character = columns[2].trimmingCharacters(in: .whitespacesAndNewlines)
+                        
+                        if !bopomofo.isEmpty && !character.isEmpty {
+                            if tempBopomospellDictionary[bopomofo] == nil {
+                                tempBopomospellDictionary[bopomofo] = [character]
+                            } else {
+                                tempBopomospellDictionary[bopomofo]?.append(character)
+                            }
+                        }
+                    }
+                }
+                
+                print("從bopomospell.csv載入了 \(tempBopomospellDictionary.count) 個注音的同音字")
+            } catch {
+                print("讀取bopomospell.csv失敗: \(error)")
+            }
+        }
+        
+        // 在主執行緒更新實際使用的字典
+        DispatchQueue.main.async {
+            self.bopomofoDictionary = tempBopomofoDictionary
+            self.bopomospellDictionary = tempBopomospellDictionary
+            print("注音資料載入完成並應用")
+        }
+    }
     // 4. 開始同音字反查模式
         func startHomophoneLookup() {
             isHomophoneLookupMode = true
