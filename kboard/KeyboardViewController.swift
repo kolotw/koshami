@@ -106,9 +106,9 @@ class KeyboardViewController: UIInputViewController {
     ]
     let secondaryLabels = [
         ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")"],
-        ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
-        ["A", "S", "D", "F", "G", "H", "J", "K", "L", ""],
-        ["", "Z", "X", "C", "V", "B", "N", "M", "", ""],
+        ["", "", "", "", "", "", "", "", "", ""],
+        ["", "", "", "", "", "", "", "", "", ""],
+        ["", "", "", "", "", "", "", "", "", ""],
         ["", "", "", ""]
     ]
 
@@ -122,9 +122,9 @@ class KeyboardViewController: UIInputViewController {
     ]
     let boshiamySecondaryLabels = [
         ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")"],
-        ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
-        ["a", "s", "d", "f", "g", "h", "j", "k", "l", "/"],
-        ["z", "x", "c", "v", "b", "n", "m", "<", ">"],
+        ["", "", "", "", "", "", "", "", "", ""],
+        ["", "", "", "", "", "", "", "", "", "/"],
+        ["", "", "", "", "", "", "", "<", ">"],
         ["", "", "", ""]
     ]
 
@@ -896,25 +896,38 @@ class KeyboardViewController: UIInputViewController {
     
     // 更新 Shift 按鈕外觀
     func updateShiftButtonAppearance() {
-        for (rowIndex, rowButtons) in keyButtons.enumerated() {
+        // 獲取正確的布局
+        let layout = keyboardRows
+        let skipNumberRow = (keyboardMetrics.deviceState == .iPhonePortrait || keyboardMetrics.deviceState == .iPhoneLandscape) && !isSymbolMode
+        
+        // 查找Shift鍵
+        for (displayRowIndex, rowButtons) in keyButtons.enumerated() {
+            // 計算對應的實際行索引，考慮是否跳過了數字行
+            let actualRowIndex = skipNumberRow ? displayRowIndex + 1 : displayRowIndex
+            
             for (keyIndex, button) in rowButtons.enumerated() {
-                if rowIndex < keyboardRows.count && keyIndex < keyboardRows[rowIndex].count {
-                    let key = keyboardRows[rowIndex][keyIndex]
+                if actualRowIndex < layout.count && keyIndex < layout[actualRowIndex].count {
+                    let key = layout[actualRowIndex][keyIndex]
                     if key.contains("shift") || key.contains("⇧") {
-                        if isShifted {
-                            if isShiftLocked {
-                                // 鎖定大寫
-                                button.backgroundColor = UIColor.darkGray
-                                button.setTitleColor(UIColor.white, for: .normal)
+                        print("找到Shift鍵：行\(displayRowIndex)，列\(keyIndex)")
+                        
+                        if var config = button.configuration {
+                            if isShifted {
+                                if isShiftLocked {
+                                    // 鎖定大寫
+                                    config.background.backgroundColor = UIColor.darkGray
+                                    config.baseForegroundColor = UIColor.systemBlue
+                                } else {
+                                    // 臨時大寫
+                                    config.background.backgroundColor = UIColor.lightGray
+                                    config.baseForegroundColor = UIColor.black
+                                }
                             } else {
-                                // 臨時大寫
-                                button.backgroundColor = UIColor.lightGray
-                                button.setTitleColor(UIColor.black, for: .normal)
+                                // 正常狀態
+                                config.background.backgroundColor = UIColor.white
+                                config.baseForegroundColor = UIColor.black
                             }
-                        } else {
-                            // 正常狀態
-                            button.backgroundColor = UIColor.white
-                            button.setTitleColor(UIColor.black, for: .normal)
+                            button.configuration = config
                         }
                     }
                 }
@@ -924,15 +937,19 @@ class KeyboardViewController: UIInputViewController {
     
     // 根據 Shift 狀態更新字母按鍵顯示
     func updateLetterKeysForShiftState() {
-        for (rowIndex, rowButtons) in keyButtons.enumerated() {
+        let layout = keyboardRows
+        let skipNumberRow = (keyboardMetrics.deviceState == .iPhonePortrait || keyboardMetrics.deviceState == .iPhoneLandscape) && !isSymbolMode
+        
+        for (displayRowIndex, rowButtons) in keyButtons.enumerated() {
+            // 計算對應的實際行索引，考慮是否跳過了數字行
+            let actualRowIndex = skipNumberRow ? displayRowIndex + 1 : displayRowIndex
+            
             for (keyIndex, button) in rowButtons.enumerated() {
-                if rowIndex == 1 || rowIndex == 2 || (rowIndex == 3 && keyIndex > 0 && keyIndex < keyButtons[3].count - 1) {
-                    if rowIndex < keyboardRows.count && keyIndex < keyboardRows[rowIndex].count {
-                        let key = keyboardRows[rowIndex][keyIndex]
-                        if key.count == 1 && key >= "a" && key <= "z" {
-                            let newKey = isShifted ? key.uppercased() : key
-                            button.setTitle(newKey, for: .normal)
-                        }
+                if actualRowIndex < layout.count && keyIndex < layout[actualRowIndex].count {
+                    let key = layout[actualRowIndex][keyIndex]
+                    if key.count == 1 && key >= "a" && key <= "z" {
+                        let newKey = isShifted ? key.uppercased() : key
+                        button.setTitle(newKey, for: .normal)
                     }
                 }
             }
@@ -1489,13 +1506,21 @@ class KeyboardViewController: UIInputViewController {
             config.background.backgroundColor = UIColor(white: 0.9, alpha: 1.0)
         }
         
-        // 添加次要標籤（如果有且不是 iPhone）
+        // 添加次要標籤（移除了iPhone設備的限制）
         if rowIndex < currentSecondaryLabels.count && keyIndex < currentSecondaryLabels[rowIndex].count {
             let secondaryText = currentSecondaryLabels[rowIndex][keyIndex]
-            if !secondaryText.isEmpty &&
-               keyboardMetrics.deviceState != .iPhonePortrait &&
-               keyboardMetrics.deviceState != .iPhoneLandscape {
-                // 只有在非 iPhone 直式模式設備上才顯示次要標籤
+            if !secondaryText.isEmpty {
+                // 修改：移除了設備類型的檢查，允許所有設備顯示次要標籤
+                
+                // 根據設備調整字體大小
+                let titleFontSize = keyboardMetrics.deviceState == .iPhonePortrait ||
+                                   keyboardMetrics.deviceState == .iPhoneLandscape ?
+                                   keyboardMetrics.titleFontSize * 0.8 : keyboardMetrics.titleFontSize
+                
+                let subtitleFontSize = keyboardMetrics.deviceState == .iPhonePortrait ||
+                                      keyboardMetrics.deviceState == .iPhoneLandscape ?
+                                      keyboardMetrics.subtitleFontSize * 0.9 : keyboardMetrics.subtitleFontSize
+                
                 config.titleAlignment = .center
                 config.title = secondaryText
                 config.subtitle = keyTitle
@@ -1503,18 +1528,18 @@ class KeyboardViewController: UIInputViewController {
                 
                 config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
                     var outgoing = incoming
-                    outgoing.font = UIFont.systemFont(ofSize: self.keyboardMetrics.titleFontSize)
+                    outgoing.font = UIFont.systemFont(ofSize: titleFontSize)
                     outgoing.foregroundColor = UIColor.darkGray
                     return outgoing
                 }
                 
                 config.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
                     var outgoing = incoming
-                    outgoing.font = UIFont.systemFont(ofSize: self.keyboardMetrics.subtitleFontSize)
+                    outgoing.font = UIFont.systemFont(ofSize: subtitleFontSize)
                     return outgoing
                 }
             } else {
-                // iPhone 直式模式或沒有次要標籤
+                // 沒有次要標籤
                 config.title = keyTitle
                 
                 config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
