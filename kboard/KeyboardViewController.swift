@@ -102,14 +102,14 @@ class KeyboardViewController: UIInputViewController {
         ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
         ["a", "s", "d", "f", "g", "h", "j", "k", "l", "'"],
         ["⇧", "z", "x", "c", "v", "b", "n", "m", ",", "."],
-        ["🌐", "  space  ", "符", "中"]
+        ["🌐", "符", "  space  ", "中", "⏎"]
     ]
     let secondaryLabels = [
         ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")"],
         ["", "", "", "", "", "", "", "", "", ""],
         ["", "", "", "", "", "", "", "", "", ""],
         ["", "", "", "", "", "", "", "", "", ""],
-        ["", "", "", ""]
+        ["", "", "", "", ""]
     ]
 
     // 修改嘸蝦米鍵盤布局，添加符號鍵
@@ -118,14 +118,14 @@ class KeyboardViewController: UIInputViewController {
         ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
         ["A", "S", "D", "F", "G", "H", "J", "K", "L", "、"],
         ["Z", "X", "C", "V", "B", "N", "M", "，", "."],
-        ["🌐", "   空白鍵   ", "符", "英"]
+        ["🌐", "符", "   空白鍵   ", "英", "⏎"]
     ]
     let boshiamySecondaryLabels = [
         ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")"],
         ["", "", "", "", "", "", "", "", "", ""],
         ["", "", "", "", "", "", "", "", "", "/"],
         ["", "", "", "", "", "", "", "<", ">"],
-        ["", "", "", ""]
+        ["", "", "", "", ""]
     ]
 
     // 修改符號鍵盤布局
@@ -134,7 +134,7 @@ class KeyboardViewController: UIInputViewController {
         ["@", "#", "$", "&", "*", "(", ")", "'", "\"", "-"],
         ["%", "+", "=", "/", ";", ":", ",", ".", "!", "?"],
         ["|", "~", "¥", "_", "^", "[", "]", "{", "}", "\\"],
-        ["🌐", "  space  ", "中"]
+        ["🌐", " ", "  space  ", "中", "⏎"]
     ]
 
     // 為符號鍵盤添加次要標籤
@@ -143,7 +143,7 @@ class KeyboardViewController: UIInputViewController {
         ["", "", "", "", "", "", "", "", "", ""],
         ["", "", "", "", "", "", "", "", "", ""],
         ["", "", "", "", "", "", "", "", "", ""],
-        ["", "", "", ""]
+        ["", "", "", "",""]
     ]
     
     // 輸入模式標誌
@@ -1413,15 +1413,22 @@ class KeyboardViewController: UIInputViewController {
     
     // 專門用於配置最後一行按鈕寬度的方法
     private func configureLastRowWidths(buttons: [UIButton]) {
-        // 確保該方法在正確時機調用 - 先移到主隊列確保視圖已布局
+        // 確保該方法在主隊列執行
         DispatchQueue.main.async {
-            // 使用實際父視圖的寬度而不是keyboardView
+            // 獲取父視圖
             let parentView = buttons.first?.superview
+            
+            // 首先強制更新布局
+            parentView?.setNeedsLayout()
+            parentView?.layoutIfNeeded()
+            
+            // 然後再獲取父視圖寬度
             guard let parentWidth = parentView?.bounds.width else {
                 print("無法獲取父視圖寬度")
                 return
             }
             
+            // 後續代碼保持不變
             let buttonSpacing = self.keyboardMetrics.buttonSpacing
             let totalSpacing = buttonSpacing * CGFloat(buttons.count - 1)
             let availableWidth = parentWidth
@@ -1430,7 +1437,6 @@ class KeyboardViewController: UIInputViewController {
             var spaceKeyIndex = -1
             for (index, button) in buttons.enumerated() {
                 let buttonTitle = button.title(for: .normal) ?? ""
-                // 使用更準確的判斷
                 if buttonTitle.contains("space") || buttonTitle.contains("空白鍵") || buttonTitle.contains("  ") {
                     spaceKeyIndex = index
                     break
@@ -1439,25 +1445,18 @@ class KeyboardViewController: UIInputViewController {
             
             // 如果找不到空白鍵，使用默認值
             if spaceKeyIndex == -1 {
-                spaceKeyIndex = 1
+                spaceKeyIndex = 2
                 print("無法找到空白鍵，默認使用索引1")
             }
             
-            // 計算各按鈕寬度 - 提高空白鍵比例
-            let spaceKeyWidthRatio: CGFloat = 0.6 // 空白鍵佔60%
-            let spaceKeyWidth = (availableWidth - totalSpacing) * spaceKeyWidthRatio
-            let functionKeyWidth = ((availableWidth - totalSpacing) * (1 - spaceKeyWidthRatio)) / CGFloat(buttons.count - 1)
-            
-            // 先移除所有現有寬度約束
+            // 移除所有現有寬度約束
             for button in buttons {
-                // 移除所有與寬度相關的約束
                 button.constraints.forEach { constraint in
                     if constraint.firstAttribute == .width {
                         button.removeConstraint(constraint)
                     }
                 }
                 
-                // 也檢查父視圖中的相關約束
                 parentView?.constraints.forEach { constraint in
                     if constraint.firstItem === button && constraint.firstAttribute == .width {
                         parentView?.removeConstraint(constraint)
@@ -1465,12 +1464,17 @@ class KeyboardViewController: UIInputViewController {
                 }
             }
             
+            // 計算各按鈕寬度
+            let spaceKeyWidthRatio: CGFloat = 0.6
+            let spaceKeyWidth = (availableWidth - totalSpacing) * spaceKeyWidthRatio
+            let functionKeyWidth = ((availableWidth - totalSpacing) * (1 - spaceKeyWidthRatio)) / CGFloat(buttons.count - 1)
+            
             // 重新設置所有按鈕寬度
             for (index, button) in buttons.enumerated() {
                 let widthConstraint: NSLayoutConstraint
                 if index == spaceKeyIndex {
                     widthConstraint = button.widthAnchor.constraint(equalToConstant: spaceKeyWidth)
-                    widthConstraint.priority = .defaultHigh + 1 // 提高優先級
+                    widthConstraint.priority = .defaultHigh + 1
                 } else {
                     widthConstraint = button.widthAnchor.constraint(equalToConstant: functionKeyWidth)
                     widthConstraint.priority = .defaultHigh
@@ -1480,7 +1484,8 @@ class KeyboardViewController: UIInputViewController {
                 print("按鈕 \(index) 寬度設置為: \(index == spaceKeyIndex ? spaceKeyWidth : functionKeyWidth)")
             }
             
-            // 強制更新布局
+            // 最後再次強制更新布局，確保新的約束應用生效
+            parentView?.setNeedsLayout()
             parentView?.layoutIfNeeded()
         }
     }
