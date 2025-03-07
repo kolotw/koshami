@@ -159,14 +159,11 @@ class KeyboardViewController: UIInputViewController {
     var isShifted = false
     var isShiftLocked = false  // 用於區分臨時大寫和鎖定大寫
     var collectedRoots = ""
-    var inMemoryBoshiamyDict: [String: [String]] = [:]
     
     // 約束參考
     var candidateViewHeightConstraint: NSLayoutConstraint!
     
     var isBoshiamyMode = true  // true 為嘸蝦米模式，false 為英文模式
-    // 添加一個狀態變量來追踪是否在"小字模式"
-    var isSecondaryLabelMode = false
     var inputCodeLabel: UILabel!
     
     // 同音字反查功能所需的屬性
@@ -346,25 +343,6 @@ class KeyboardViewController: UIInputViewController {
             print("處理資料庫失敗: \(error)")
         }
     }
-    
-    // 根據裝置類型獲取適當的字型大小
-    func getFontSize(baseLandscapeSize: CGFloat, basePortraitSize: CGFloat) -> CGFloat {
-        let isLandscape = view.bounds.width > view.bounds.height
-        
-        if isIPhone {
-            // iPhone 上的字型大小縮小，直式模式下更小
-            if isLandscape {
-                return baseLandscapeSize - 2 // 橫式模式稍微縮小
-            } else {
-                return basePortraitSize - 10 // 直式模式更小
-            }
-        } else {
-            // 非 iPhone 設備保持原始大小
-            return isLandscape ? baseLandscapeSize : basePortraitSize
-        }
-    }
-    
-    
     
     
     // 生命週期方法
@@ -808,47 +786,6 @@ class KeyboardViewController: UIInputViewController {
         return false
     }
 
-    // 獲取按鈕索引
-    private func getButtonIndices(_ button: UIButton) -> (Int, Int) {
-        let row = button.tag / 100
-        let col = button.tag % 100
-        return (row, col)
-    }
-
-    // 獲取按鍵標題
-    private func getKeyTitle(_ row: Int, _ col: Int) -> String? {
-        let currentLayout: [[String]]
-        if isSymbolMode {
-            currentLayout = symbolRows
-        } else {
-            currentLayout = isBoshiamyMode ? boshiamySymbols : keyboardRows
-        }
-        
-        guard row < currentLayout.count && col < currentLayout[row].count else {
-            print("無效的按鍵索引: row \(row), col \(col)")
-            return nil
-        }
-        
-        return currentLayout[row][col]
-    }
-
-    // 處理特殊情況
-    private func handleSpecialCase(_ key: String) -> Bool {
-        // 處理同音字反查
-        if key == "、" && isBoshiamyMode {
-            startHomophoneLookup()
-            return true
-        }
-        
-        // 處理同音字反查模式下的按鍵
-        if isHomophoneLookupMode {
-            handleHomophoneLookupKeyPress(key)
-            return true
-        }
-        
-        return false
-    }
-
     // 處理按鍵類型
     private func handleKeyType(_ key: String) {
         // 輸入模式切換
@@ -907,19 +844,7 @@ class KeyboardViewController: UIInputViewController {
 
     // 處理刪除鍵
     private func handleDeleteKey() {
-        if isBoshiamyMode && !collectedRoots.isEmpty {
-            collectedRoots = String(collectedRoots.dropLast())
-            updateInputCodeDisplay(collectedRoots)
-            
-            if collectedRoots.isEmpty {
-                displayCandidates([])
-            } else {
-                let candidates = lookupBoshiamyDictionary(collectedRoots)
-                displayCandidates(candidates)
-            }
-        } else {
-            textDocumentProxy.deleteBackward()
-        }
+        handleDeleteAction()
     }
 
     // 處理一般按鍵
@@ -1013,15 +938,6 @@ class KeyboardViewController: UIInputViewController {
         }
     }
     
-    // 切換小字模式
-    func toggleSecondaryLabelMode() {
-        isSecondaryLabelMode = !isSecondaryLabelMode
-        
-        // 添加視覺反饋以指示當前處於小字模式
-        // 例如，可以改變某個指示器的顏色或添加一個標籤
-        
-        print("切換到\(isSecondaryLabelMode ? "小字" : "正常")模式")
-    }
     
     // 切換大小寫
     func toggleShift() {
@@ -1626,187 +1542,6 @@ class KeyboardViewController: UIInputViewController {
             
         return button
     }
-
-    // 輔助方法：判斷是否為特殊按鍵
-    private func isSpecialKey(_ keyTitle: String) -> Bool {
-        return keyTitle == "符" || keyTitle == "ABC" ||
-               keyTitle.contains("中") || keyTitle.contains("英") ||
-               keyTitle.contains("🌐")
-    }
-
-    // 輔助方法：獲取次要標籤文字
-    private func getSecondaryText(_ rowIndex: Int, _ keyIndex: Int, _ labels: [[String]]) -> String? {
-        guard rowIndex < labels.count && keyIndex < labels[rowIndex].count else { return nil }
-        return labels[rowIndex][keyIndex]
-    }
-
-    // 輔助方法：設置雙標籤按鈕
-    private func setupDualLabelButton(_ config: inout UIButton.Configuration, title: String, subtitle: String) {
-        config.titleAlignment = .center
-        config.title = title
-        config.subtitle = subtitle
-        config.titlePadding = 2
-        
-        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
-            var outgoing = incoming
-            outgoing.font = UIFont.systemFont(ofSize: self.keyboardMetrics.titleFontSize)
-            outgoing.foregroundColor = UIColor.darkGray
-            return outgoing
-        }
-        
-        config.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
-            var outgoing = incoming
-            outgoing.font = UIFont.systemFont(ofSize: self.keyboardMetrics.subtitleFontSize)
-            return outgoing
-        }
-    }
-
-    // 輔助方法：設置單標籤按鈕
-    private func setupSingleLabelButton(_ config: inout UIButton.Configuration, title: String) {
-        config.title = title
-        
-        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
-            var outgoing = incoming
-            outgoing.font = UIFont.systemFont(ofSize: self.keyboardMetrics.subtitleFontSize)
-            return outgoing
-        }
-    }
-    
-    
-    
-    // 6. 為iPhone直式模式創建簡化的右側欄
-    private func createSimpleSideColumn(isLandscape: Bool, width: CGFloat) -> UIStackView {
-        // 創建垂直堆疊視圖作為側欄容器
-        let columnStackView = UIStackView()
-        columnStackView.axis = .vertical
-        columnStackView.distribution = .fillEqually
-        columnStackView.spacing = 12
-        columnStackView.translatesAutoresizingMaskIntoConstraints = false
-        
-        // 固定側欄寬度
-        columnStackView.widthAnchor.constraint(equalToConstant: width).isActive = true
-        
-        // 創建刪除按鈕
-        let deleteButton = UIButton(type: .system)
-        deleteButton.backgroundColor = UIColor(white: 0.85, alpha: 1.0)
-        deleteButton.setTitle("⌫", for: .normal)
-        deleteButton.titleLabel?.font = UIFont.systemFont(ofSize: 16)
-        deleteButton.layer.cornerRadius = 4
-        deleteButton.layer.borderWidth = 0.5
-        deleteButton.layer.borderColor = UIColor.darkGray.cgColor
-        deleteButton.tag = 2000  // 使用與正常側欄相同的標籤
-        deleteButton.addTarget(self, action: #selector(sideButtonPressed(_:)), for: .touchUpInside)
-        deleteButton.translatesAutoresizingMaskIntoConstraints = false
-        
-        // 添加長按手勢
-        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPressDelete(_:)))
-        longPress.minimumPressDuration = 0.5
-        deleteButton.addGestureRecognizer(longPress)
-        
-        // 創建換行按鈕
-        let returnButton = UIButton(type: .system)
-        returnButton.backgroundColor = UIColor(white: 0.85, alpha: 1.0)
-        returnButton.setTitle("⏎", for: .normal)
-        returnButton.titleLabel?.font = UIFont.systemFont(ofSize: 16)
-        returnButton.layer.cornerRadius = 4
-        returnButton.layer.borderWidth = 0.5
-        returnButton.layer.borderColor = UIColor.darkGray.cgColor
-        returnButton.tag = 2001  // 使用與正常側欄相同的標籤
-        returnButton.addTarget(self, action: #selector(sideButtonPressed(_:)), for: .touchUpInside)
-        returnButton.translatesAutoresizingMaskIntoConstraints = false
-        
-        // 添加按鈕到堆疊視圖
-        columnStackView.addArrangedSubview(deleteButton)
-        columnStackView.addArrangedSubview(returnButton)
-        
-        return columnStackView
-    }
-
-    // 幫助函數：添加寬度約束
-    private func addWidthConstraint(to button: UIButton, width: CGFloat) {
-        let constraint = button.widthAnchor.constraint(equalToConstant: width)
-        constraint.priority = .defaultHigh
-        constraint.isActive = true
-    }
-    
-    
-    // 創建側欄的輔助方法
-    private func createSideColumn(isLeft: Bool, isLandscape: Bool, width: CGFloat = 0) -> UIStackView {
-        // 創建垂直堆疊視圖作為側欄容器
-        let columnStackView = UIStackView()
-        columnStackView.axis = .vertical
-        columnStackView.distribution = .fillEqually // 修改為均等分布
-        columnStackView.spacing = 12 // 設定為固定間距12
-        columnStackView.translatesAutoresizingMaskIntoConstraints = false
-        
-        // 固定側欄寬度
-        // 根據設備類型和方向設置側欄寬度
-        let sideColumnWidth: CGFloat
-        if isIPhone {
-            if isLandscape {
-                sideColumnWidth = 50  // iPhone 橫向
-            } else {
-                sideColumnWidth = 40  // iPhone 縱向
-            }
-        } else {
-            //ipad
-            if isLandscape {
-                sideColumnWidth = 70  // iPad 橫向
-            } else {
-                sideColumnWidth = 60  // iPad 縱向
-            }
-        }
-        columnStackView.widthAnchor.constraint(equalToConstant: sideColumnWidth).isActive = true
-        
-        // 定義側欄按鍵
-        let topButtonTitle = "⌫"  // backspace
-        let bottomButtonTitle = "⏎"  // enter
-        
-        // 創建頂部按鈕 (backspace)
-        let topButton = UIButton(type: .system)
-        topButton.layer.cornerRadius = 5
-        topButton.layer.borderWidth = 0.5
-        topButton.layer.borderColor = UIColor.darkGray.cgColor
-        topButton.translatesAutoresizingMaskIntoConstraints = false
-        
-        var topConfig = UIButton.Configuration.plain()
-        topConfig.title = topButtonTitle
-        topConfig.baseForegroundColor = UIColor.black
-        topConfig.background.backgroundColor = UIColor(white: 0.85, alpha: 1.0)
-        // 添加字體設置
-        topConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
-            var outgoing = incoming
-            outgoing.font = UIFont.systemFont(ofSize: isLandscape ? 16 : 18)  // 設置與底部按鈕相同的字體大小
-            return outgoing
-        }
-        topButton.configuration = topConfig
-        
-        // 設置標籤，區分左右側欄
-        let tagOffset = isLeft ? 1000 : 2000
-        topButton.tag = tagOffset
-        topButton.addTarget(self, action: #selector(sideButtonPressed(_:)), for: .touchUpInside)
-        
-        // 創建底部按鈕 (enter)
-        let bottomButton = UIButton(type: .system)
-        bottomButton.backgroundColor = UIColor(white: 0.85, alpha: 1.0)
-        bottomButton.setTitleColor(UIColor.black, for: .normal)
-        bottomButton.layer.cornerRadius = 5
-        bottomButton.layer.borderWidth = 0.5
-        bottomButton.layer.borderColor = UIColor.darkGray.cgColor
-        bottomButton.setTitle(bottomButtonTitle, for: .normal)
-        bottomButton.titleLabel?.font = UIFont.systemFont(ofSize: isLandscape ? 16 : 18)
-        
-        // 設置標籤
-        bottomButton.tag = tagOffset + 1
-        bottomButton.addTarget(self, action: #selector(sideButtonPressed(_:)), for: .touchUpInside)
-        bottomButton.translatesAutoresizingMaskIntoConstraints = false
-        
-        // 移除中間空白部分，讓兩個按鈕平均分布整個高度
-        columnStackView.addArrangedSubview(topButton)
-        columnStackView.addArrangedSubview(bottomButton)
-        
-        return columnStackView
-    }
     
     // 處理側欄按鍵點擊
     @objc func sideButtonPressed(_ sender: UIButton) {
@@ -1818,23 +1553,19 @@ class KeyboardViewController: UIInputViewController {
         if tag == 1000 || tag == 2000 {
             // 執行單擊刪除操作
             handleDeleteAction()
-            
-            // 添加長按手勢
-            let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPressDelete(_:)))
-            longPress.minimumPressDuration = 0.5  // 0.5秒後觸發長按
-            sender.addGestureRecognizer(longPress)
         } else if tag == 1001 || tag == 2001 {
             // enter - 左下或右下按鍵
             textDocumentProxy.insertText("\n")
         }
     }
+    
     // 新增 - 處理長按刪除手勢
     @objc func handleLongPressDelete(_ gesture: UILongPressGestureRecognizer) {
-        isLongPressDeleteActive = (gesture.state == .began)
-        
-        if isLongPressDeleteActive {
+        if gesture.state == .began {
+            isLongPressDeleteActive = true
             startDeleteTimer()
-        } else {
+        } else if gesture.state == .ended || gesture.state == .cancelled {
+            isLongPressDeleteActive = false
             stopDeleteTimer()
         }
     }
@@ -1854,53 +1585,43 @@ class KeyboardViewController: UIInputViewController {
     // 新增 - 定時器觸發的刪除操作
     @objc private func timerDeleteAction() {
         if isLongPressDeleteActive {
-            handleDeleteAction()
+            handleDeleteAction(isLongPress: true)
         }
     }
 
     // 新增 - 統一刪除操作的邏輯
-    private func handleDeleteAction() {
-        // 如果沒有收集的字根，直接退出同音字反查模式
-        if collectedRoots.isEmpty {
-            exitHomophoneLookupMode()
-            textDocumentProxy.deleteBackward()  // 執行一般的刪除操作
+    private func handleDeleteAction(isLongPress: Bool = false) {
+        // 1. 如果在同音字反查模式，優先處理反查邏輯
+        if isHomophoneLookupMode {
+            handleDeleteInLookupMode(isLongPress: isLongPress)
             return
         }
         
-        // 如果在同音字反查模式下並且有收集的字根
-        if isHomophoneLookupMode && !collectedRoots.isEmpty {
-            // 刪除最後一個字根
+        // 2. 如果在嘸蝦米模式並且有收集字根，處理字根刪除
+        if isBoshiamyMode && !collectedRoots.isEmpty {
+            // 刪除一個字根
             collectedRoots = String(collectedRoots.dropLast())
             
-            // 如果刪除後字根為空，退出反查模式
-            if collectedRoots.isEmpty {
-                exitHomophoneLookupMode()
-                return
-            }
-            
-            // 更新輸入提示和候選字
-            updateInputCodeDisplay("同音字反查：" + collectedRoots)
-            let candidates = lookupBoshiamyDictionary(collectedRoots)
-            displayCandidates(candidates)
-        } else if isBoshiamyMode && !collectedRoots.isEmpty {
-            // 嘸蝦米模式下的刪除邏輯
-            collectedRoots = String(collectedRoots.dropLast())
-            
-            // 更新輸入字碼顯示
+            // 更新輸入顯示
             updateInputCodeDisplay(collectedRoots)
             
-            // 重新查詢候選字
+            // 更新候選字
             if collectedRoots.isEmpty {
-                // 如果沒有輸入的字根了，清空候選字區域
                 displayCandidates([])
             } else {
-                // 否則，查詢新的候選字
                 let candidates = lookupBoshiamyDictionary(collectedRoots)
                 displayCandidates(candidates)
             }
-        } else {
-            // 普通刪除操作
+        }
+        // 3. 沒有字根或不在嘸蝦米模式，執行一般刪除
+        else {
             textDocumentProxy.deleteBackward()
+        }
+        
+        // 如果是長按操作，可以在這裡加入額外邏輯
+        if isLongPress {
+            // 長按刪除可能需要的額外邏輯
+            // 如果暫時不需要特殊處理，則留空
         }
     }
     
@@ -1965,70 +1686,6 @@ class KeyboardViewController: UIInputViewController {
         return results
     }
     
-    // 載入CSV字典方法
-    func loadBoshiamyDictionaryFromCSV() {
-        print("開始載入CSV字典...")
-        
-        // 首先嘗試從Bundle加載
-        if let csvPath = Bundle.main.path(forResource: "liuDB", ofType: "csv") {
-            loadCSVFromPath(csvPath)
-            return
-        }
-        
-        // 如果Bundle中沒有，嘗試從Documents目錄加載
-        let docDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let fileURL = docDir.appendingPathComponent("liuDB.csv")
-        
-        if FileManager.default.fileExists(atPath: fileURL.path) {
-            loadCSVFromPath(fileURL.path)
-            return
-        }
-        
-        print("找不到CSV檔案，將使用內建的基本字根")
-    }
-    
-    // 從指定路徑載入CSV
-    
-    private func loadCSVFromPath(_ path: String) {
-        do {
-            let csvContent = try String(contentsOfFile: path, encoding: .utf8)
-            let rows = csvContent.components(separatedBy: .newlines)
-            var loadedCount = 0
-            
-            for row in rows where !row.isEmpty {
-                let columns = row.components(separatedBy: ",")
-                // 檢查行是否有足夠的列
-                if columns.count >= 3 {
-                    // CSV格式: uid,spell,cw
-                    // 我們需要spell和cw欄位
-                    let spell = columns[1].trimmingCharacters(in: .whitespacesAndNewlines)
-                    let character = columns[2].trimmingCharacters(in: .whitespacesAndNewlines)
-                    
-                    if !spell.isEmpty && !character.isEmpty {
-                        if inMemoryBoshiamyDict[spell] == nil {
-                            inMemoryBoshiamyDict[spell] = [character]
-                        } else {
-                            inMemoryBoshiamyDict[spell]?.append(character)
-                        }
-                        loadedCount += 1
-                    }
-                }
-            }
-            
-            print("從CSV載入了 \(loadedCount) 筆資料, \(inMemoryBoshiamyDict.count) 個字根")
-            
-            // 輸出一些範例
-//            if let sampleKeys = inMemoryBoshiamyDict.keys.prefix(5) {
-//                for key in Array(sampleKeys) {
-//                    if let values = inMemoryBoshiamyDict[key] {
-//                        print("範例: 字根 '\(key)' -> \(values)")
-//                    }
-//                }
-//            }
-        } catch {
-            print("讀取CSV檔案失敗: \(error)")
-        }
-    }
     deinit {
         // 移除通知觀察者
         NotificationCenter.default.removeObserver(self)
@@ -2215,51 +1872,50 @@ class KeyboardViewController: UIInputViewController {
        }
        
        // 7. 處理反查模式下的刪除鍵
-       func handleDeleteInLookupMode() {
-           switch homophoneLookupStage {
-           case 1:  // 輸入字根階段
-               if !collectedRoots.isEmpty {
-                   // 刪除最後一個字根
-                   collectedRoots = String(collectedRoots.dropLast())
-                   
-                   // 更新輸入提示
-                   updateInputCodeDisplay("同音字反查：" + collectedRoots)
-                   
-                   if collectedRoots.isEmpty {
-                       // 如果字根為空，清空候選字
-                       displayCandidates([])
-                   } else {
-                       // 重新查詢候選字
-                       let candidates = lookupBoshiamyDictionary(collectedRoots)
-                       displayCandidates(candidates)
-                   }
-               } else {
-                   // 如果字根為空，退出反查模式
-                   exitHomophoneLookupMode()
-               }
-               break
-               
-           case 2, 3:  // 選擇注音或同音字階段
-               // 返回上一個階段
-               homophoneLookupStage -= 1
-               
-               if homophoneLookupStage == 1 {
-                   // 返回字根輸入階段
-                   updateInputCodeDisplay("同音字反查：" + collectedRoots)
-                   let candidates = lookupBoshiamyDictionary(collectedRoots)
-                   displayCandidates(candidates)
-               } else if homophoneLookupStage == 2 {
-                   // 返回注音選擇階段
-                   updateInputCodeDisplay("選擇「" + lastSelectedCharacter + "」的注音")
-                   let bopomofoList = bopomofoDictionary[lastSelectedCharacter] ?? []
-                   displayCandidates(bopomofoList)
-               }
-               break
-               
-           default:
-               break
-           }
-       }
+    private func handleDeleteInLookupMode(isLongPress: Bool = false) {
+        switch homophoneLookupStage {
+        case 1:  // 輸入字根階段
+            if !collectedRoots.isEmpty {
+                // 刪除最後一個字根
+                collectedRoots = String(collectedRoots.dropLast())
+                
+                // 更新輸入提示
+                updateInputCodeDisplay("同音字反查：" + collectedRoots)
+                
+                if collectedRoots.isEmpty {
+                    // 如果字根為空，清空候選字
+                    displayCandidates([])
+                } else {
+                    // 重新查詢候選字
+                    let candidates = lookupBoshiamyDictionary(collectedRoots)
+                    displayCandidates(candidates)
+                }
+            } else {
+                // 如果字根為空，退出反查模式
+                exitHomophoneLookupMode()
+            }
+            
+        case 2, 3:  // 選擇注音或同音字階段
+            // 返回上一個階段
+            homophoneLookupStage -= 1
+            
+            if homophoneLookupStage == 1 {
+                // 返回字根輸入階段
+                updateInputCodeDisplay("同音字反查：" + collectedRoots)
+                let candidates = lookupBoshiamyDictionary(collectedRoots)
+                displayCandidates(candidates)
+            } else if homophoneLookupStage == 2 {
+                // 返回注音選擇階段
+                updateInputCodeDisplay("選擇「" + lastSelectedCharacter + "」的注音")
+                let bopomofoList = bopomofoDictionary[lastSelectedCharacter] ?? []
+                displayCandidates(bopomofoList)
+            }
+            
+        default:
+            // 未知階段，退出反查模式
+            exitHomophoneLookupMode()
+        }
+    }
        
        // 8. 退出同音字反查模式
        func exitHomophoneLookupMode() {
