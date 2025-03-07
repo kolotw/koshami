@@ -106,9 +106,9 @@ class KeyboardViewController: UIInputViewController {
     ]
     let secondaryLabels = [
         ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")"],
-        ["", "", "", "", "", "", "", "", "", ""],
-        ["", "", "", "", "", "", "", "", "", ""],
-        ["", "", "", "", "", "", "", "", "", ""],
+        ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],  // 填入大寫字母
+        ["A", "S", "D", "F", "G", "H", "J", "K", "L", "\""],
+        ["", "Z", "X", "C", "V", "B", "N", "M", "<", ">"],  // 第一個是shift鍵，保留空字串
         ["", "", "", "", ""]
     ]
 
@@ -122,9 +122,9 @@ class KeyboardViewController: UIInputViewController {
     ]
     let boshiamySecondaryLabels = [
         ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")"],
-        ["", "", "", "", "", "", "", "", "", ""],
-        ["", "", "", "", "", "", "", "", "", "/"],
-        ["", "", "", "", "", "", "", "<", ">"],
+        ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],  // 填入小寫字母
+        ["a", "s", "d", "f", "g", "h", "j", "k", "l", "/"],
+        ["z", "x", "c", "v", "b", "n", "m", "<", ">"],
         ["", "", "", "", ""]
     ]
 
@@ -443,37 +443,49 @@ class KeyboardViewController: UIInputViewController {
         }
         
         // 重新添加長按手勢
-        for rowButtons in keyButtons {
-            for button in rowButtons {
-                // 獲取按鈕的行列索引
-                let row = button.tag / 100
-                let col = button.tag % 100
-                
-                // 選擇當前布局
+        for (rowIndex, rowButtons) in keyButtons.enumerated() {
+            for (colIndex, button) in rowButtons.enumerated() {
+                // 選擇當前布局和次要標籤
                 let currentLayout: [[String]]
+                let currentSecondaryLabels: [[String]]
+                
                 if isSymbolMode {
                     currentLayout = symbolRows
+                    currentSecondaryLabels = symbolSecondaryLabels
                 } else {
                     currentLayout = isBoshiamyMode ? boshiamySymbols : keyboardRows
+                    currentSecondaryLabels = isBoshiamyMode ? boshiamySecondaryLabels : secondaryLabels
                 }
                 
                 // 確保索引有效
-                if row < currentLayout.count && col < currentLayout[row].count {
-                    let key = currentLayout[row][col]
+                if rowIndex < currentLayout.count && colIndex < currentLayout[rowIndex].count &&
+                   rowIndex < currentSecondaryLabels.count && colIndex < currentSecondaryLabels[rowIndex].count {
+                    
+                    let keyTitle = currentLayout[rowIndex][colIndex]
+                    let secondaryText = currentSecondaryLabels[rowIndex][colIndex]
                     
                     // 跳過特殊按鍵
-                    if key.contains("中") || key.contains("英") || key.contains("space") || key.contains("空白鍵") || key.contains("shift") ||
-                        key.contains("⇧") || key.contains("dismiss") || key.contains("⌄") ||
-                        key.contains("delete") || key.contains("⌫") || key.contains("return") ||
-                        key.contains("⏎") || key.contains("🌐") || key.contains("英/中") ||
-                        key == "符" || key == "ABC" {
+                    if keyTitle.contains("中") || keyTitle.contains("英") || keyTitle.contains("space") ||
+                       keyTitle.contains("空白鍵") || keyTitle.contains("shift") || keyTitle.contains("⇧") ||
+                       keyTitle.contains("dismiss") || keyTitle.contains("⌄") || keyTitle.contains("delete") ||
+                       keyTitle.contains("⌫") || keyTitle.contains("return") || keyTitle.contains("⏎") ||
+                       keyTitle.contains("🌐") || keyTitle.contains("英/中") || keyTitle == "符" || keyTitle == "ABC" {
                         continue
                     }
                     
-                    // 添加長按手勢
-                    let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
-                    longPress.minimumPressDuration = 0.3 // 設置較短的長按時間以提高響應速度
-                    button.addGestureRecognizer(longPress)
+                    // 只在有次要標籤時添加長按手勢
+                    if !secondaryText.isEmpty {
+                        // 添加長按手勢
+                        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
+                        longPress.minimumPressDuration = 0.4 // 增加到0.4秒，避免太敏感
+                        longPress.cancelsTouchesInView = true
+                        
+                        // 設置長按手勢的優先級高於點擊
+                        longPress.delegate = self
+                        
+                        button.addGestureRecognizer(longPress)
+                        print("為按鍵 \(keyTitle) 添加長按手勢，次要標籤: \(secondaryText)")
+                    }
                 }
             }
         }
@@ -481,7 +493,7 @@ class KeyboardViewController: UIInputViewController {
     
     // 處理長按事件
     @objc func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
-        // 只在手勢開始時處理一次
+        // 只在手勢開始時處理一次，避免重複處理
         if gesture.state == .began, let button = gesture.view as? UIButton {
             print("長按事件觸發")
             
@@ -490,32 +502,44 @@ class KeyboardViewController: UIInputViewController {
             let col = button.tag % 100
             
             // 選擇當前布局和次要標籤
-            let currentLayout = isBoshiamyMode ? boshiamySymbols : keyboardRows
-            let currentSecondaryLabels = isBoshiamyMode ? boshiamySecondaryLabels : secondaryLabels
+            let currentLayout: [[String]]
+            let currentSecondaryLabels: [[String]]
+            
+            if isSymbolMode {
+                currentLayout = symbolRows
+                currentSecondaryLabels = symbolSecondaryLabels
+            } else {
+                currentLayout = isBoshiamyMode ? boshiamySymbols : keyboardRows
+                currentSecondaryLabels = isBoshiamyMode ? boshiamySecondaryLabels : secondaryLabels
+            }
             
             // 確保索引有效
             if row < currentLayout.count && col < currentLayout[row].count &&
-                row < currentSecondaryLabels.count && col < currentSecondaryLabels[row].count {
+               row < currentSecondaryLabels.count && col < currentSecondaryLabels[row].count {
                 
                 let secondaryText = currentSecondaryLabels[row][col]
                 
                 if !secondaryText.isEmpty {
-                    if isBoshiamyMode {
-                        // 嘸蝦米模式下，直接輸入次要標籤對應的字符
-                        textDocumentProxy.insertText(secondaryText)
-                    } else {
-                        // 英文模式下，如果是字母則輸入大寫
-                        let key = currentLayout[row][col]
-                        if key.count == 1 && key >= "a" && key <= "z" {
-                            textDocumentProxy.insertText(key.uppercased())
-                        } else {
-                            // 非字母按鍵則輸入次要標籤字符
-                            textDocumentProxy.insertText(secondaryText)
-                        }
-                    }
-                    
                     // 提供視覺反饋
                     animateButton(button)
+                    
+                    // 延遲執行文字輸入，確保動畫效果先顯示
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        if self.isBoshiamyMode {
+                            // 嘸蝦米模式下，直接輸入次要標籤對應的字符
+                            self.textDocumentProxy.insertText(secondaryText)
+                        } else {
+                            // 英文模式下，如果是字母則輸入大寫
+                            let key = currentLayout[row][col]
+                            if key.count == 1 && key >= "a" && key <= "z" {
+                                self.textDocumentProxy.insertText(key.uppercased())
+                            } else {
+                                // 非字母按鍵則輸入次要標籤字符
+                                self.textDocumentProxy.insertText(secondaryText)
+                            }
+                        }
+                        print("長按輸入: \(secondaryText)")
+                    }
                 }
             }
         }
@@ -725,18 +749,46 @@ class KeyboardViewController: UIInputViewController {
     }
     
     @objc func keyPressed(_ sender: UIButton) {
-        // 檢查是否由長按手勢觸發
-        if isTriggeredByLongPress(sender) { return }
+        // 檢查是否由長按手勢觸發，如果是則不處理按一下事件
+        if isTriggeredByLongPress(sender) {
+            print("長按狀態中，忽略點擊事件")
+            return
+        }
         
         // 獲取按鍵資訊
-        let (row, col) = getButtonIndices(sender)
-        guard let key = getKeyTitle(row, col) else { return }
+        let row = sender.tag / 100
+        let col = sender.tag % 100
+        
+        // 選擇當前布局
+        let currentLayout: [[String]]
+        if isSymbolMode {
+            currentLayout = symbolRows
+        } else {
+            currentLayout = isBoshiamyMode ? boshiamySymbols : keyboardRows
+        }
+        
+        // 確保索引有效
+        guard row < currentLayout.count && col < currentLayout[row].count else {
+            print("無效的按鍵索引: row \(row), col \(col)")
+            return
+        }
+        
+        let key = currentLayout[row][col]
         
         // 按鍵視覺反饋
         animateButton(sender)
         
         // 處理特殊情況
-        if handleSpecialCase(key) { return }
+        if key == "、" && isBoshiamyMode {
+            startHomophoneLookup()
+            return
+        }
+        
+        // 處理同音字反查模式下的按鍵
+        if isHomophoneLookupMode {
+            handleHomophoneLookupKeyPress(key)
+            return
+        }
         
         // 處理按鍵類型
         handleKeyType(key)
@@ -744,9 +796,14 @@ class KeyboardViewController: UIInputViewController {
 
     // 檢查是否由長按觸發
     private func isTriggeredByLongPress(_ button: UIButton) -> Bool {
-        if let longPress = button.gestureRecognizers?.first(where: { $0 is UILongPressGestureRecognizer }) as? UILongPressGestureRecognizer,
-           longPress.state == .began || longPress.state == .changed {
-            return true
+        // 檢查按鈕是否有長按手勢，且手勢是否正在進行中
+        for recognizer in button.gestureRecognizers ?? [] {
+            if let longPress = recognizer as? UILongPressGestureRecognizer {
+                if longPress.state == .began || longPress.state == .changed {
+                    print("檢測到長按手勢進行中")
+                    return true
+                }
+            }
         }
         return false
     }
@@ -2218,4 +2275,15 @@ class KeyboardViewController: UIInputViewController {
     
     
     
+}
+extension KeyboardViewController: UIGestureRecognizerDelegate {
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        // 不允許同時識別多個手勢
+        return false
+    }
+    
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        // 確保觸摸開始時記錄相關信息
+        return true
+    }
 }
