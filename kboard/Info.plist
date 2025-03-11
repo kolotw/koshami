@@ -29,6 +29,10 @@
 	</array>
 	<key>UIFileSharingEnabled</key>
 	<true/>
+	<key>CFBundleDisplayName</key>
+	<string>kBoard-Koshami</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 </dict>
