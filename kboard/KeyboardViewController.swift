@@ -6,7 +6,7 @@ class KeyboardViewController: UIInputViewController {
     // 添加緩衝區屬性
     var assoCharBuffer: [(previous: String, current: String)] = []
     var lastAssoWriteTime: TimeInterval = 0
-    let assoWriteInterval: TimeInterval = 30 // 30秒
+    let assoWriteInterval: TimeInterval = 10 // 30秒
     
     enum DeviceState {
         case iPhonePortrait
@@ -304,6 +304,11 @@ class KeyboardViewController: UIInputViewController {
         let startTime = CFAbsoluteTimeGetCurrent()
         var results = [String]()
         
+        // 先確保緩衝區已寫入
+        if !assoCharBuffer.isEmpty {
+            flushAssociatedCharBuffer()
+        }
+    
         // 如果資料庫還沒初始化完成，返回空結果
         guard let db = assoDB, db.isOpen else {
             print("關聯字資料庫未開啟或尚未初始化完成")
@@ -1801,15 +1806,14 @@ class KeyboardViewController: UIInputViewController {
                         // 根據頻率決定是減少還是刪除
                         if freq <= 1 {
                             // 頻率為1或更小，直接刪除該筆資料
+                            // 直接執行刪除操作
                             let deleteSQL = "DELETE FROM AssoDB WHERE cw = ? AND asso = ?"
                             if db.executeUpdate(deleteSQL, withArgumentsIn: [previous, current]) {
                                 print("已刪除關聯字對: \(previous)-\(current)")
-                            } else {
-                                print("刪除關聯字對失敗: \(db.lastErrorMessage())")
                             }
                         } else {
                             // 頻率大於1，減少頻率
-                            let updateSQL = "UPDATE AssoDB SET freq = freq - 2 WHERE cw = ? AND asso = ?"
+                            let updateSQL = "UPDATE AssoDB SET freq = freq - 3 WHERE cw = ? AND asso = ?"
                             if db.executeUpdate(updateSQL, withArgumentsIn: [previous, current]) {
                                 print("已減少關聯字對 \(previous)-\(current) 的頻率")
                             } else {
@@ -1824,6 +1828,24 @@ class KeyboardViewController: UIInputViewController {
             } catch {
                 print("檢查關聯字頻率時發生錯誤: \(error)")
             }
+        }
+    }
+    
+    // 在刪除資料庫中的關聯字時，也從緩衝區中移除
+    func removeFromBuffer(previous: String, current: String) {
+        assoCharBuffer.removeAll { pair in
+            return pair.previous == previous && pair.current == current
+        }
+    }
+    
+    // 在刪除關聯字後，強制提交所有緩衝的操作
+    func forceSyncDatabase() {
+        // 強制寫入所有緩衝的關聯字
+        flushAssociatedCharBuffer()
+        
+        // 確保資料庫同步
+        if let db = assoDB, db.isOpen {
+            db.executeUpdate("PRAGMA wal_checkpoint(FULL)", withArgumentsIn: [])
         }
     }
     
