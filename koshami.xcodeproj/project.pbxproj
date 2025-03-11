@@ -13,6 +13,7 @@
 		E0586A922D71884000D1CD39 /* kboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E0586A8B2D71884000D1CD39 /* kboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E09987F62D7562930025D1CD /* bopomospell.csv in Resources */ = {isa = PBXBuildFile; fileRef = E09987F52D7562930025D1CD /* bopomospell.csv */; };
 		E09987F72D7562930025D1CD /* bopomofo.csv in Resources */ = {isa = PBXBuildFile; fileRef = E09987F42D7562930025D1CD /* bopomofo.csv */; };
+		E0E5ABF92D800E5B003380B1 /* extraAsso.db in Resources */ = {isa = PBXBuildFile; fileRef = E0E5ABF82D800E5B003380B1 /* extraAsso.db */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -62,6 +63,7 @@
 		E0586A8B2D71884000D1CD39 /* kboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = kboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		E09987F42D7562930025D1CD /* bopomofo.csv */ = {isa = PBXFileReference; lastKnownFileType = text; path = bopomofo.csv; sourceTree = "<group>"; };
 		E09987F52D7562930025D1CD /* bopomospell.csv */ = {isa = PBXFileReference; lastKnownFileType = text; path = bopomospell.csv; sourceTree = "<group>"; };
+		E0E5ABF82D800E5B003380B1 /* extraAsso.db */ = {isa = PBXFileReference; lastKnownFileType = file; path = extraAsso.db; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -145,6 +147,7 @@
 		E0586A512D717D1A00D1CD39 = {
 			isa = PBXGroup;
 			children = (
+				E0E5ABF82D800E5B003380B1 /* extraAsso.db */,
 				E09987F42D7562930025D1CD /* bopomofo.csv */,
 				E09987F52D7562930025D1CD /* bopomospell.csv */,
 				E04270D62D74744C00E17F0E /* liu.db */,
@@ -343,6 +346,7 @@
 			files = (
 				E09987F62D7562930025D1CD /* bopomospell.csv in Resources */,
 				E09987F72D7562930025D1CD /* bopomofo.csv in Resources */,
+				E0E5ABF92D800E5B003380B1 /* extraAsso.db in Resources */,
 				E04270D72D74744C00E17F0E /* liu.db in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

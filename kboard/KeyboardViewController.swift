@@ -2,6 +2,12 @@ import UIKit
 import FMDB
 
 class KeyboardViewController: UIInputViewController {
+    var assoDB: FMDatabase?
+    // 添加緩衝區屬性
+    var assoCharBuffer: [(previous: String, current: String)] = []
+    var lastAssoWriteTime: TimeInterval = 0
+    let assoWriteInterval: TimeInterval = 30 // 30秒
+    
     enum DeviceState {
         case iPhonePortrait
         case iPhoneLandscape
@@ -230,9 +236,15 @@ class KeyboardViewController: UIInputViewController {
             return
         }
         
+        guard let bundleAssoDBPath = Bundle.main.path(forResource: "extraAsso", ofType: "db") else {
+                print("在 Bundle 中找不到關聯字資料庫檔案")
+                return
+            }
+        
         // 獲取臨時目錄路徑
         let tempDirectory = NSTemporaryDirectory()
         let destinationPath = tempDirectory + "liu.db"
+        let assoDestinationPath = tempDirectory + "extraAsso.db"
         
         do {
             // 如果檔案已存在，先移除
@@ -259,7 +271,262 @@ class KeyboardViewController: UIInputViewController {
         } catch {
             print("處理資料庫失敗: \(error)")
         }
+        
+        do {
+                // 如果檔案已存在，先移除
+                if FileManager.default.fileExists(atPath: assoDestinationPath) {
+                    try FileManager.default.removeItem(atPath: assoDestinationPath)
+                }
+                
+                // 複製資料庫到臨時目錄
+                try FileManager.default.copyItem(atPath: bundleAssoDBPath, toPath: assoDestinationPath)
+                print("關聯字資料庫已複製到: \(assoDestinationPath)")
+                
+                // 打開複製的關聯字資料庫
+                assoDB = FMDatabase(path: assoDestinationPath)
+                if assoDB?.open() == true {
+                    print("成功開啟關聯字資料庫，路徑: \(assoDestinationPath)")
+                    
+                    // 禁用 WAL 模式
+                    if assoDB?.executeUpdate("PRAGMA journal_mode=DELETE", withArgumentsIn: []) == true {
+                        print("已設定關聯字資料庫為標準 journal 模式")
+                    }
+                } else {
+                    print("開啟關聯字資料庫失敗: \(assoDB?.lastErrorMessage() ?? "未知錯誤")")
+                }
+            } catch {
+                print("處理關聯字資料庫失敗: \(error)")
+            }
     }
+    
+    // 查詢關聯字方法
+    func lookupAssociatedChars(_ previousChar: String, limit: Int = 5) -> [String] {
+        let startTime = CFAbsoluteTimeGetCurrent()
+        var results = [String]()
+        
+        // 如果資料庫還沒初始化完成，返回空結果
+        guard let db = assoDB, db.isOpen else {
+            print("關聯字資料庫未開啟或尚未初始化完成")
+            return results
+        }
+        
+        // 執行查詢
+        let querySQL = "SELECT asso FROM AssoDB WHERE cw = ? ORDER BY dbtime DESC, freq DESC LIMIT ?"
+        
+        if let resultSet = db.executeQuery(querySQL, withArgumentsIn: [previousChar, limit]) {
+            while resultSet.next() {
+                if let associatedChar = resultSet.string(forColumn: "asso") {
+                    results.append(associatedChar)
+                }
+            }
+            resultSet.close()
+        } else {
+            print("查詢關聯字失敗: \(db.lastErrorMessage())")
+        }
+        
+        let endTime = CFAbsoluteTimeGetCurrent()
+        print("查詢字「\(previousChar)」的關聯字, 找到 \(results.count) 個, 耗時: \((endTime-startTime)*1000) ms")
+        
+        return results
+    }
+    
+    // 緩衝關聯字方法
+    func bufferAssociatedChar(previous: String, current: String) {
+        // 避免非中文字符或特殊字符的關聯
+        guard previous.count == 1 && current.count == 1 else { return }
+        
+        // 檢查前一字是否為英文（含大小寫）、數字或符號
+        let englishCharsPattern = "^[A-Za-z0-9\\p{P}\\p{S}]$"
+        let japanesePunctuation = """
+        、。，．・：；？！～'"「」『』【】（）［］｛｝〈〉《》〔〕
+        """
+
+        let chinesePunctuation = """
+        ，。、；：？！…—·''""〝〞‵′〃《》〈〉【】〖〗（）［］｛｝「」『』
+        """
+        let allPunctuation = japanesePunctuation + chinesePunctuation
+        
+        // 1. 檢查前一字是否為英文、數字或標點符號
+        if let regex = try? NSRegularExpression(pattern: englishCharsPattern, options: []) {
+            let range = NSRange(location: 0, length: previous.utf16.count)
+            if regex.firstMatch(in: previous, options: [], range: range) != nil {
+                print("前一字 '\(previous)' 是英文、數字或西文符號，不記錄關聯")
+                return
+            }
+        }
+        
+        // 2. 檢查前一字是否為中文或日文標點符號
+        if allPunctuation.contains(previous) {
+            print("前一字 '\(previous)' 是中文或日文標點符號，不記錄關聯")
+            return
+        }
+        
+        // 3. 檢查前一字是否為日文字符
+        // 日文平假名：U+3040..U+309F
+        // 日文片假名：U+30A0..U+30FF
+        if let unicodeScalar = previous.unicodeScalars.first {
+            let value = unicodeScalar.value
+            if (0x3040...0x309F).contains(value) || (0x30A0...0x30FF).contains(value) {
+                print("前一字 '\(previous)' 是日文字符，不記錄關聯")
+                return
+            }
+        }
+        
+        // 通過所有過濾條件後，將關聯對加入緩衝區
+        assoCharBuffer.append((previous: previous, current: current))
+        
+        // 檢查是否應該執行寫入
+        let currentTime = Date().timeIntervalSince1970
+        if assoCharBuffer.count >= 10 || (currentTime - lastAssoWriteTime > assoWriteInterval) {
+            flushAssociatedCharBuffer()
+        }
+    }
+    
+    
+    // 寫入關聯字緩衝區方法
+    func flushAssociatedCharBuffer() {
+        guard !assoCharBuffer.isEmpty, let db = assoDB, db.isOpen else { return }
+        
+        // 使用交易來提高效率
+        if db.beginTransaction() {
+            // 獲取當前時間並格式化為指定格式
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd HH-mm"
+            let formattedDate = dateFormatter.string(from: Date())
+            
+            for item in assoCharBuffer {
+                // 嘗試更新現有記錄
+                let updateSQL = """
+                UPDATE AssoDB 
+                SET freq = freq + 1, dbtime = ? 
+                WHERE cw = ? AND asso = ?
+                """
+                
+                if db.executeUpdate(updateSQL, withArgumentsIn: [formattedDate, item.previous, item.current]) {
+                    // 檢查是否有記錄被更新
+                    if db.changes == 0 {
+                        // 無記錄被更新，插入新記錄
+                        let insertSQL = """
+                        INSERT INTO AssoDB (cw, asso, freq, dbtime)
+                        VALUES (?, ?, 1, ?)
+                        """
+                        
+                        if !db.executeUpdate(insertSQL, withArgumentsIn: [item.previous, item.current, formattedDate]) {
+                            print("插入關聯字失敗: \(db.lastErrorMessage())")
+                        }
+                    }
+                } else {
+                    print("更新關聯字失敗: \(db.lastErrorMessage())")
+                }
+            }
+            
+            if db.commit() {
+                print("成功更新 \(assoCharBuffer.count) 個關聯字記錄")
+                assoCharBuffer.removeAll()
+                lastAssoWriteTime = Date().timeIntervalSince1970
+            } else {
+                print("提交關聯字更新失敗: \(db.lastErrorMessage())")
+            }
+        }
+    }
+    
+    func cleanupOldAssociatedChars() {
+        guard let db = assoDB, db.isOpen else { return }
+        
+        // 獲取 30 天前的日期
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd HH-mm"
+        let calendar = Calendar.current
+        let thirtyDaysAgo = calendar.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        let cutoffDate = dateFormatter.string(from: thirtyDaysAgo)
+        
+        // 刪除使用頻率低於 3 且超過 30 天未使用的關聯字
+        let cleanupSQL = """
+        DELETE FROM AssoDB
+        WHERE freq < 3 AND dbtime < ?
+        """
+        
+        if db.executeUpdate(cleanupSQL, withArgumentsIn: [cutoffDate]) {
+            let deleted = db.changes
+            if deleted > 0 {
+                print("已清理 \(deleted) 個不常用的關聯字記錄")
+            }
+        } else {
+            print("清理舊關聯字記錄失敗: \(db.lastErrorMessage())")
+        }
+    }
+    
+    // 顯示關聯字的方法
+    func displayAssociatedChars(_ associatedChars: [String]) {
+        // 清除現有的候選字按鈕
+        for button in candidateButtons {
+            button.removeFromSuperview()
+        }
+        candidateButtons.removeAll()
+        
+        // 移除舊的視圖（除了輸入標籤）
+        for subview in candidateView.subviews {
+            if subview != inputCodeLabel {
+                subview.removeFromSuperview()
+            }
+        }
+        
+        // 如果沒有關聯字，不顯示
+        if associatedChars.isEmpty {
+            return
+        }
+        
+        // 創建關聯字標籤
+        let assoLabel = UILabel()
+        assoLabel.text = "▶"  // 使用箭頭表示關聯字
+        assoLabel.textColor = UIColor.systemBlue
+        assoLabel.font = UIFont.systemFont(ofSize: keyboardMetrics.subtitleFontSize)
+        assoLabel.translatesAutoresizingMaskIntoConstraints = false
+        candidateView.addSubview(assoLabel)
+        
+        // 設置標籤約束
+        NSLayoutConstraint.activate([
+            assoLabel.leadingAnchor.constraint(equalTo: candidateView.leadingAnchor, constant: 10),
+            assoLabel.centerYAnchor.constraint(equalTo: candidateView.centerYAnchor)
+        ])
+        
+        // 創建關聯字堆疊視圖
+        let assoStackView = UIStackView()
+        assoStackView.axis = .horizontal
+        assoStackView.spacing = 5
+        assoStackView.alignment = .center
+        assoStackView.translatesAutoresizingMaskIntoConstraints = false
+        candidateView.addSubview(assoStackView)
+        
+        // 設置堆疊視圖約束
+        NSLayoutConstraint.activate([
+            assoStackView.centerYAnchor.constraint(equalTo: candidateView.centerYAnchor),
+            assoStackView.leadingAnchor.constraint(equalTo: assoLabel.trailingAnchor, constant: 5)
+        ])
+        
+        // 依序添加關聯字按鈕
+        for (index, assoChar) in associatedChars.enumerated() {
+            let button = createCandidateButton(for: assoChar, at: index)
+            button.backgroundColor = UIColor(red: 0.9, green: 0.95, blue: 1.0, alpha: 1.0)  // 淺藍色背景，區分關聯字
+            assoStackView.addArrangedSubview(button)
+            candidateButtons.append(button)
+        }
+        
+        // 設置堆疊視圖的尾部約束
+        if let lastButton = candidateButtons.last {
+            lastButton.trailingAnchor.constraint(equalTo: candidateView.contentLayoutGuide.trailingAnchor, constant: -10).isActive = true
+        }
+        
+        // 更新佈局以計算內容尺寸
+        candidateView.layoutIfNeeded()
+        
+        // 設置滾動視圖的內容尺寸
+        let stackWidth = assoStackView.frame.width
+        let totalWidth = assoLabel.frame.width + 15 + stackWidth
+        candidateView.contentSize = CGSize(width: max(totalWidth, candidateView.frame.width), height: candidateView.frame.height)
+    }
+    
+    
     
     
     // 生命週期方法
@@ -304,6 +571,10 @@ class KeyboardViewController: UIInputViewController {
             DispatchQueue.global(qos: .utility).async {
                 self.loadBopomofoData()
             }
+        }
+        
+        DispatchQueue.global(qos: .utility).async {
+            self.cleanupOldAssociatedChars()
         }
     }
     
@@ -1101,9 +1372,33 @@ class KeyboardViewController: UIInputViewController {
            }
            
        } else {
-           // 原有的候選字選擇處理...
+           // 獲取前一個字符
+           var previousChar = ""
+           if let contextBefore = textDocumentProxy.documentContextBeforeInput,
+              let lastChar = contextBefore.last {
+               previousChar = String(lastChar)
+           }
+           
            // 輸入選中的字詞
            textDocumentProxy.insertText(candidate)
+           
+           // 記錄關聯字 (如果有前一個字符，且都是單字)
+           if !previousChar.isEmpty && candidate.count == 1 {
+               bufferAssociatedChar(previous: previousChar, current: candidate)
+           }
+           
+           // 無論是否顯示關聯字，都清空已收集的字根
+           collectedRoots = ""
+           updateInputCodeDisplay("")
+           
+           // 查詢並顯示關聯字 (如果輸入的是單字)
+           if candidate.count == 1 {
+               let associatedChars = lookupAssociatedChars(candidate)
+               if !associatedChars.isEmpty {
+                   displayAssociatedChars(associatedChars)
+                   return  // 提前返回，不清空候選字區域
+               }
+           }
            
            // 清除已輸入的字根
            collectedRoots = ""
@@ -1426,8 +1721,25 @@ class KeyboardViewController: UIInputViewController {
         }
     }
 
-    // 新增 - 統一刪除操作的邏輯
+    // 修改統一刪除操作的邏輯
     private func handleDeleteAction(isLongPress: Bool = false) {
+        // 檢查當前文字內容，存儲可能被刪除的字符
+        var deletedChar = ""
+        var previousChar = ""
+        
+        if let currentText = textDocumentProxy.documentContextBeforeInput, currentText.count >= 1 {
+            // 獲取將被刪除的字符
+            if let lastIndex = currentText.index(currentText.endIndex, offsetBy: -1, limitedBy: currentText.startIndex) {
+                deletedChar = String(currentText[lastIndex])
+            }
+            
+            // 如果文字長度大於1，還需要獲取前一個字符
+            if currentText.count >= 2,
+               let prevIndex = currentText.index(currentText.endIndex, offsetBy: -2, limitedBy: currentText.startIndex) {
+                previousChar = String(currentText[prevIndex])
+            }
+        }
+        
         // 1. 如果在同音字反查模式，優先處理反查邏輯
         if isHomophoneLookupMode {
             handleDeleteInLookupMode(isLongPress: isLongPress)
@@ -1453,12 +1765,65 @@ class KeyboardViewController: UIInputViewController {
         // 3. 沒有字根或不在嘸蝦米模式，執行一般刪除
         else {
             textDocumentProxy.deleteBackward()
+            
+            // 清空候選字顯示
+            displayCandidates([])
+            
+            // 檢查是否需要更新關聯字頻率
+            if !deletedChar.isEmpty && !previousChar.isEmpty {
+                decreaseAssociationFrequency(previous: previousChar, current: deletedChar)
+            }
         }
         
         // 如果是長按操作，可以在這裡加入額外邏輯
         if isLongPress {
             // 長按刪除可能需要的額外邏輯
-            // 如果暫時不需要特殊處理，則留空
+        }
+    }
+    
+    // 減少關聯字頻率的方法
+    func decreaseAssociationFrequency(previous: String, current: String) {
+        // 避免處理非有效字符
+        guard previous.count == 1 && current.count == 1 else { return }
+        
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self = self, let db = self.assoDB, db.isOpen else { return }
+            
+            // 先檢查該組關聯字是否存在
+            let querySQL = "SELECT freq FROM AssoDB WHERE cw = ? AND asso = ?"
+            
+            do {
+                if let resultSet = db.executeQuery(querySQL, withArgumentsIn: [previous, current]) {
+                    if resultSet.next() {
+                        let freq = resultSet.int(forColumn: "freq")
+                        resultSet.close()
+                        
+                        // 根據頻率決定是減少還是刪除
+                        if freq <= 1 {
+                            // 頻率為1或更小，直接刪除該筆資料
+                            let deleteSQL = "DELETE FROM AssoDB WHERE cw = ? AND asso = ?"
+                            if db.executeUpdate(deleteSQL, withArgumentsIn: [previous, current]) {
+                                print("已刪除關聯字對: \(previous)-\(current)")
+                            } else {
+                                print("刪除關聯字對失敗: \(db.lastErrorMessage())")
+                            }
+                        } else {
+                            // 頻率大於1，減少頻率
+                            let updateSQL = "UPDATE AssoDB SET freq = freq - 2 WHERE cw = ? AND asso = ?"
+                            if db.executeUpdate(updateSQL, withArgumentsIn: [previous, current]) {
+                                print("已減少關聯字對 \(previous)-\(current) 的頻率")
+                            } else {
+                                print("減少關聯字頻率失敗: \(db.lastErrorMessage())")
+                            }
+                        }
+                    } else {
+                        // 關聯字對不存在
+                        print("關聯字對 \(previous)-\(current) 不存在於資料庫")
+                    }
+                }
+            } catch {
+                print("檢查關聯字頻率時發生錯誤: \(error)")
+            }
         }
     }
     
@@ -1523,11 +1888,20 @@ class KeyboardViewController: UIInputViewController {
         return results
     }
     
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        
+        // 保存緩衝區中的關聯字
+        flushAssociatedCharBuffer()
+    }
+    
     deinit {
+        // 關閉資料庫
+        assoDB?.close()
+        database?.close()
+        
         // 移除通知觀察者
         NotificationCenter.default.removeObserver(self)
-        
-        database?.close()
     }
     //------------同音字反查
     // 2. 加載注音數據的方法
