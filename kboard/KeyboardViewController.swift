@@ -1825,8 +1825,6 @@ class KeyboardViewController: UIInputViewController {
                         print("關聯字對 \(previous)-\(current) 不存在於資料庫")
                     }
                 }
-            } catch {
-                print("檢查關聯字頻率時發生錯誤: \(error)")
             }
         }
     }
